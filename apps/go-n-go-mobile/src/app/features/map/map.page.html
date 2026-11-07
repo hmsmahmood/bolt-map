@@ -1,0 +1,368 @@
+<ion-content [fullscreen]="true" [scrollY]="false">
+  <main class="map-page">
+    <div id="gng-map-canvas" class="native-map" aria-hidden="true"></div>
+
+    <header class="map-topbar">
+      <a
+        class="back-button"
+        routerLink="/"
+        [attr.aria-label]="i18n.text('backHome')"
+        >‹</a
+      >
+      <div class="map-heading">
+        <strong>{{ i18n.text('mapTitle') }}</strong>
+        <span>{{ mapStatus() }}</span>
+      </div>
+      <ion-button
+        class="theme-button"
+        fill="clear"
+        [attr.aria-label]="i18n.text(nightMode() ? 'mapDay' : 'mapNight')"
+        (click)="toggleNightMode()"
+      >
+        {{ i18n.text(nightMode() ? 'mapDay' : 'mapNight') }}
+      </ion-button>
+    </header>
+
+    @if (navigationActive()) {
+    <section class="navigation-guidance" aria-live="assertive" role="status">
+      @if (navigationPaused()) {
+      <span class="guidance-label">{{ i18n.text('mapNavigationPaused') }}</span>
+      } @else if (navigationArrived()) {
+      <span class="guidance-label"
+        >{{ i18n.text('mapNavigationArrived') }}</span
+      >
+      <strong>{{ i18n.text('mapNavigationDestination') }}</strong>
+      } @else if (nextManeuver(); as maneuver) {
+      <span class="guidance-label">
+        {{ i18n.text('mapNavigationIn') }} {{
+        formatDistance(maneuver.distanceMeters) }}
+      </span>
+      <strong>{{ maneuver.instruction }}</strong>
+      @if (maneuver.streetNames.length > 0) {
+      <span class="guidance-road">
+        {{ i18n.text('mapNavigationNextRoad') }}: {{ maneuver.streetNames.join('
+        · ') }}
+      </span>
+      } } @else {
+      <span class="guidance-label"
+        >{{ i18n.text('mapNavigationFinishing') }}</span
+      >
+      }
+    </section>
+    } @if (mapState() === 'loading' || mapState() === 'unconfigured' ||
+    mapState() === 'error') {
+    <section class="map-message" role="status" aria-live="polite">
+      <p>{{ mapStatus() }}</p>
+      @if (mapState() === 'error') {
+      <ion-button fill="outline" (click)="initializeMap()"
+        >{{ i18n.text('checkConnection') }}</ion-button
+      >
+      }
+    </section>
+    } @if (mapState() === 'ready') {
+    <nav class="map-controls" [attr.aria-label]="i18n.text('mapTitle')">
+      <ion-button
+        fill="solid"
+        [attr.aria-label]="i18n.text('mapZoomIn')"
+        (click)="changeZoom(1)"
+        >+</ion-button
+      >
+      <ion-button
+        fill="solid"
+        [attr.aria-label]="i18n.text('mapZoomOut')"
+        (click)="changeZoom(-1)"
+        >−</ion-button
+      >
+    </nav>
+
+    <section class="map-bottom-panel">
+      <div class="map-status-row">
+        <span
+          class="location-status"
+          [class.active]="locationState() === 'active'"
+        >
+          {{ locationError() ? i18n.text(locationError()!) : mapStatus() }}
+        </span>
+        <span class="traffic-status"
+          >{{ i18n.text('mapTrafficUnavailable') }}</span
+        >
+      </div>
+      <p class="map-privacy-note">{{ i18n.text('mapPrivacyNote') }}</p>
+      @if (locationState() === 'error' || locationState() === 'denied') {
+      <p class="location-error" role="alert">
+        {{ locationError() ? i18n.text(locationError()!) :
+        i18n.text('mapLocationFailed') }}
+      </p>
+      } @if (navigationActive()) {
+      <section class="navigation-status">
+        @if (navigationPaused()) {
+        <p class="route-error" role="status">
+          {{ i18n.text('mapNavigationPaused') }}
+        </p>
+        <ion-button
+          fill="outline"
+          [disabled]="locationState() === 'requesting'"
+          (click)="startLocation()"
+        >
+          {{ i18n.text('mapNavigationRetryLocation') }}
+        </ion-button>
+        } @if (routeError()) {
+        <p class="route-error" role="alert">{{ i18n.text(routeError()!) }}</p>
+        } @if (navigationOffRoute()) {
+        <p class="route-error" role="alert">
+          {{ i18n.text('mapNavigationOffRoute') }}
+        </p>
+        } @if (navigationArrived()) {
+        <p class="arrival-message">{{ i18n.text('mapNavigationArrived') }}</p>
+        } @else { @if (currentRoadName(); as road) {
+        <p class="current-road">
+          {{ i18n.text('mapNavigationRoad') }}: <strong>{{ road }}</strong>
+        </p>
+        }
+        <div class="navigation-trip-stats">
+          <div>
+            <strong>{{ remainingDurationMinutes() }} min</strong>
+            <span>{{ i18n.text('mapNavigationRemaining') }}</span>
+          </div>
+          <div>
+            <strong>{{ formatDistance(remainingDistanceKm() * 1000) }}</strong>
+            <span>{{ i18n.text('mapNavigationDistance') }}</span>
+          </div>
+          <div>
+            <strong>{{ formatSpeed(currentSpeedKph()) }}</strong>
+            <span>{{ i18n.text('mapNavigationSpeed') }}</span>
+          </div>
+        </div>
+        @if (estimatedArrival(); as arrival) {
+        <p class="arrival-estimate">
+          {{ i18n.text('mapNavigationArrival') }} <strong>{{ arrival }}</strong>
+        </p>
+        } } @if (voiceError()) {
+        <p class="route-error" role="alert">{{ i18n.text(voiceError()!) }}</p>
+        }
+        <div class="map-actions">
+          <ion-button fill="outline" (click)="toggleVoiceGuidance()">
+            {{ i18n.text(voiceGuidanceEnabled() ? 'mapVoiceOff' : 'mapVoiceOn')
+            }}
+          </ion-button>
+          @if (!navigationArrived()) {
+          <ion-button
+            fill="outline"
+            [disabled]="routeLoading() || locationState() !== 'active'"
+            (click)="reroute()"
+          >
+            {{ i18n.text(routeLoading() ? 'mapRouteCalculating' :
+            'mapNavigationReroute') }}
+          </ion-button>
+          }
+          <ion-button fill="outline" (click)="stopNavigation()">
+            {{ i18n.text(navigationArrived() ? 'mapNavigationDone' :
+            'mapNavigationCancel') }}
+          </ion-button>
+        </div>
+      </section>
+      } @else if (routePlanning()) {
+      <section class="route-planner" aria-live="polite">
+        <p class="route-prompt">{{ i18n.text('mapRoutePrompt') }}</p>
+        <ion-button
+          fill="outline"
+          [disabled]="locationState() === 'requesting'"
+          (click)="useLocationForRoute()"
+        >
+          {{ i18n.text(locationState() === 'active' ? 'mapLocationActive' :
+          'mapRouteLocation') }}
+        </ion-button>
+        @if (routeProfilesLoading()) {
+        <p>{{ i18n.text('mapRouteLoadingProfiles') }}</p>
+        } @else if (routeProfiles().length > 0) {
+        <ion-select
+          interface="action-sheet"
+          [label]="i18n.text('mapRouteVehicle')"
+          [value]="selectedVehicleProfileId()"
+          (ionChange)="selectVehicleProfile($event.detail.value)"
+        >
+          @for (profile of routeProfiles(); track profile.id) {
+          <ion-select-option [value]="profile.id">
+            {{ profile.name }} · {{ profile.vehicleType }}
+          </ion-select-option>
+          }
+        </ion-select>
+        } @else {
+        <p class="route-error">
+          {{ i18n.text(routeProfilesError() ?? 'mapRouteNoProfiles') }}
+        </p>
+        <ion-button fill="outline" routerLink="/vehicle-profiles">
+          {{ i18n.text('mapRouteManageVehicles') }}
+        </ion-button>
+        }
+        <p class="route-destination">
+          {{ i18n.text(routeDestination() ? 'mapRouteDestinationSelected' :
+          'mapRouteChooseDestination') }}
+        </p>
+        @if (routeError()) {
+        <p class="route-error" role="alert">{{ i18n.text(routeError()!) }}</p>
+        } @if (routeSummary()) {
+        <p class="route-summary">
+          <strong>{{ routeSummary() }}</strong>
+          @if (navigationRoute()?.maneuvers?.length) {
+          <span>{{ navigationRoute()!.maneuvers[0].instruction }}</span>
+          }
+        </p>
+        <ion-button
+          expand="block"
+          [disabled]="!navigationRoute() || locationState() !== 'active'"
+          (click)="startNavigation()"
+        >
+          {{ i18n.text('mapNavigationStart') }}
+        </ion-button>
+        }
+        <div class="map-actions">
+          <ion-button
+            expand="block"
+            [disabled]="routeLoading() || locationState() !== 'active' || !routeDestination() || !selectedVehicleProfileId() || routeProfilesLoading()"
+            (click)="calculateRoute()"
+          >
+            {{ i18n.text(routeLoading() ? 'mapRouteCalculating' :
+            'mapRouteCalculate') }}
+          </ion-button>
+          @if (routeDestination() || navigationRoute()) {
+          <ion-button fill="outline" (click)="clearRoute()">
+            {{ i18n.text('mapRouteClear') }}
+          </ion-button>
+          }
+          <ion-button fill="outline" (click)="closeRoutePlanner()">
+            {{ i18n.text('mapRouteClose') }}
+          </ion-button>
+        </div>
+      </section>
+      } @else {
+      <div class="map-actions">
+        <ion-button expand="block" (click)="startLocation()">
+          {{ i18n.text('mapLocation') }}
+        </ion-button>
+        <ion-button fill="outline" (click)="toggleFollowingLocation()">
+          {{ i18n.text(followingLocation() ? 'mapFollowing' : 'mapFollow') }}
+        </ion-button>
+        <ion-button fill="outline" (click)="openRoutePlanner()">
+          {{ i18n.text('mapRoutePlan') }}
+        </ion-button>
+      </div>
+      }
+      <section class="community-reports">
+        <div class="map-actions">
+          <ion-button
+            fill="outline"
+            [disabled]="communityReportsLoading()"
+            (click)="toggleCommunityReports()"
+          >
+            {{ i18n.text(communityReportsOpen() ? 'mapCommunityHide' :
+            'mapCommunityShow') }}
+          </ion-button>
+        </div>
+        @if (communityReportsOpen()) {
+        <div class="community-report-content">
+          <p class="community-report-note">
+            {{ i18n.text('mapCommunityPrivacy') }}
+          </p>
+          <ion-button
+            fill="outline"
+            [disabled]="communityReportsLoading()"
+            (click)="loadCommunityReports()"
+          >
+            {{ i18n.text('mapCommunityRefresh') }}
+          </ion-button>
+          @if (communityReportMessage()) {
+          <p
+            class="community-report-message"
+            [class.error]="communityReportMessage() === 'mapCommunityLoadFailed' || communityReportMessage() === 'mapCommunityReportFailed' || communityReportMessage() === 'mapCommunityVoteFailed' || communityReportMessage() === 'mapCommunityDeleteFailed' || communityReportMessage() === 'mapCommunityNeedsLocation'"
+            role="status"
+          >
+            {{ i18n.text(communityReportMessage()!) }}
+          </p>
+          }
+          <ion-select
+            interface="action-sheet"
+            [label]="i18n.text('mapCommunityType')"
+            [value]="communityReportType()"
+            (ionChange)="selectCommunityReportType($event.detail.value)"
+          >
+            <ion-select-option value="congestion">
+              {{ i18n.text('mapCommunityCongestion') }}
+            </ion-select-option>
+            <ion-select-option value="accident">
+              {{ i18n.text('mapCommunityAccident') }}
+            </ion-select-option>
+            <ion-select-option value="road_hazard">
+              {{ i18n.text('mapCommunityHazard') }}
+            </ion-select-option>
+            <ion-select-option value="road_closure">
+              {{ i18n.text('mapCommunityClosure') }}
+            </ion-select-option>
+            <ion-select-option value="breakdown">
+              {{ i18n.text('mapCommunityBreakdown') }}
+            </ion-select-option>
+          </ion-select>
+          <ion-button
+            expand="block"
+            [disabled]="communityReportSending() || locationState() !== 'active'"
+            (click)="submitCommunityReport()"
+          >
+            {{ i18n.text(communityReportSending() ? 'working' :
+            'mapCommunitySubmit') }}
+          </ion-button>
+          @if (communityReportsLoading()) {
+          <p class="community-report-note">{{ i18n.text('working') }}</p>
+          } @else { @for (report of communityReports(); track report.id) {
+          <article class="community-report-item">
+            <div class="community-report-heading">
+              <strong
+                >{{ i18n.text(communityIncidentTypeKey(report.type)) }}</strong
+              >
+              <span>{{ i18n.text(communityConfidenceKey(report)) }}</span>
+            </div>
+            <p class="community-report-note">
+              {{ i18n.text('mapCommunitySource') }} · {{ report.confirmations }}
+              {{ i18n.text('mapCommunityConfirmations') }} · {{ report.clears }}
+              {{ i18n.text('mapCommunityClears') }}
+            </p>
+            <div class="map-actions">
+              <ion-button
+                fill="outline"
+                [disabled]="communityVoteLoadingId() !== null"
+                (click)="voteOnCommunityReport(report, 'confirm')"
+              >
+                {{ i18n.text('mapCommunityConfirm') }}
+              </ion-button>
+              <ion-button
+                fill="outline"
+                [disabled]="communityVoteLoadingId() !== null"
+                (click)="voteOnCommunityReport(report, 'clear')"
+              >
+                {{ i18n.text('mapCommunityClear') }}
+              </ion-button>
+              @if (report.isMine) {
+              <ion-button
+                fill="outline"
+                [disabled]="communityVoteLoadingId() !== null"
+                (click)="deleteCommunityReport(report)"
+              >
+                {{ i18n.text('mapCommunityDelete') }}
+              </ion-button>
+              }
+            </div>
+          </article>
+          } }
+        </div>
+        }
+      </section>
+      <a
+        class="map-attribution"
+        href="https://www.openstreetmap.org/copyright"
+        target="_blank"
+        rel="noopener noreferrer"
+        >{{ i18n.text('mapAttribution') }}</a
+      >
+    </section>
+    }
+  </main>
+</ion-content>

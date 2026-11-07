@@ -1,0 +1,14 @@
+---
+description: Persistent architecture, privacy, and phase-safety context for Go 'n Go
+alwaysApply: true
+---
+
+# Go 'n Go project context
+
+- Read `PROJECT_CONTEXT.md` and relevant source files before work; verify its status snapshot rather than assuming it is current.
+- Keep MapLibre rendering, Valhalla routing, device GPS, provider traffic, and community reports independently testable.
+- Do not fabricate data or claim provider coverage, legal compliance, production readiness, database behavior, or device performance without direct evidence.
+- Minimize location data; never place coordinates, tokens, passwords, or route payloads in logs or committed configuration.
+- Preserve existing authentication and ownership controls; use real isolated databases for database verification.
+- Report exact commands and PASS, PARTIAL, BLOCKED, FAIL, or NOT TESTED evidence.
+- When a request says to stop for approval, do not begin the next phase.

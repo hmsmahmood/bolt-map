@@ -1,0 +1,150 @@
+<ion-header>
+  <ion-toolbar>
+    <div class="toolbar-inner">
+      <a routerLink="/" class="back-link">{{ i18n.text('backHome') }}</a>
+      <strong>{{ i18n.text('vehicleProfilesTitle') }}</strong>
+    </div>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <main class="vehicle-shell">
+    <header class="page-heading">
+      <p class="eyebrow">GO 'N GO</p>
+      <h1>{{ i18n.text('vehicleProfilesTitle') }}</h1>
+      <p>{{ i18n.text('vehicleProfilesIntro') }}</p>
+    </header>
+
+    @if (error()) {
+      <p class="form-error" role="alert">{{ error() }}</p>
+    }
+    @if (loading()) {
+      <p role="status">{{ i18n.text('working') }}</p>
+    } @else if (profiles().length === 0 && !editingId()) {
+      <ion-card>
+        <ion-card-content>{{ i18n.text('noVehicleProfiles') }}</ion-card-content>
+      </ion-card>
+    } @else {
+      <section class="profile-list" aria-label="Vehicle profiles">
+        @for (profile of profiles(); track profile.id) {
+          <ion-card>
+            <ion-card-header>
+              <ion-card-title>{{ profile.name }}</ion-card-title>
+            </ion-card-header>
+            <ion-card-content>
+              <p class="vehicle-summary">
+                {{ vehicleTypeLabel(profile.vehicleType) }} · {{ profile.make }}
+                {{ profile.model }} @if (profile.modelYear) { · {{ profile.modelYear }} }
+              </p>
+              @if (profile.registrationNumber) {
+                <p>{{ i18n.text('vehicleRegistration') }}: {{ profile.registrationNumber }}</p>
+              }
+              @if (profile.maxWeightKg || profile.maxHeightCm || profile.maxLengthCm) {
+                <p class="capabilities">
+                  {{ i18n.text('vehicleCapabilities') }}
+                  @if (profile.maxWeightKg) { · {{ profile.maxWeightKg }} kg }
+                  @if (profile.maxHeightCm) { · {{ profile.maxHeightCm }} cm H }
+                  @if (profile.maxLengthCm) { · {{ profile.maxLengthCm }} cm L }
+                </p>
+              }
+              @if (confirmingDeleteId() === profile.id) {
+                <p class="confirm-text" role="status">{{ i18n.text('confirmDeleteVehicle') }}</p>
+                <div class="actions">
+                  <ion-button
+                    color="danger"
+                    [disabled]="saving()"
+                    (click)="deleteProfile(profile.id)"
+                  >{{ i18n.text('deleteVehicle') }}</ion-button>
+                  <ion-button fill="clear" (click)="cancelDelete()">
+                    {{ i18n.text('cancel') }}
+                  </ion-button>
+                </div>
+              } @else {
+                <div class="actions">
+                  <ion-button fill="outline" (click)="beginEdit(profile)">
+                    {{ i18n.text('editVehicle') }}
+                  </ion-button>
+                  <ion-button fill="clear" color="danger" (click)="deleteProfile(profile.id)">
+                    {{ i18n.text('deleteVehicle') }}
+                  </ion-button>
+                </div>
+              }
+            </ion-card-content>
+          </ion-card>
+        }
+      </section>
+    }
+
+    @if (!editingId()) {
+      <ion-button expand="block" (click)="beginCreate()">
+        {{ i18n.text('addVehicle') }}
+      </ion-button>
+    }
+
+    @if (formOpen()) {
+      <ion-card class="form-card">
+        <ion-card-header>
+          <ion-card-title>
+            {{ editingId() ? i18n.text('editVehicle') : i18n.text('addVehicle') }}
+          </ion-card-title>
+        </ion-card-header>
+        <ion-card-content>
+          <form [formGroup]="form" (ngSubmit)="save()">
+            <ion-item>
+              <ion-label position="stacked">{{ i18n.text('vehicleName') }}</ion-label>
+              <ion-input formControlName="name" maxlength="60" required />
+            </ion-item>
+            <ion-item>
+              <ion-label position="stacked">{{ i18n.text('vehicleType') }}</ion-label>
+              <ion-select formControlName="vehicleType" interface="popover">
+                <ion-select-option value="car">{{ i18n.text('vehicleType_car') }}</ion-select-option>
+                <ion-select-option value="motorcycle">{{ i18n.text('vehicleType_motorcycle') }}</ion-select-option>
+                <ion-select-option value="truck">{{ i18n.text('vehicleType_truck') }}</ion-select-option>
+              </ion-select>
+            </ion-item>
+            <div class="form-grid">
+              <ion-item>
+                <ion-label position="stacked">{{ i18n.text('vehicleMake') }}</ion-label>
+                <ion-input formControlName="make" maxlength="60" required />
+              </ion-item>
+              <ion-item>
+                <ion-label position="stacked">{{ i18n.text('vehicleModel') }}</ion-label>
+                <ion-input formControlName="model" maxlength="60" required />
+              </ion-item>
+              <ion-item>
+                <ion-label position="stacked">{{ i18n.text('vehicleYear') }}</ion-label>
+                <ion-input formControlName="modelYear" type="number" min="1900" max="2100" />
+              </ion-item>
+              <ion-item>
+                <ion-label position="stacked">{{ i18n.text('vehicleRegistration') }}</ion-label>
+                <ion-input formControlName="registrationNumber" maxlength="20" />
+              </ion-item>
+              <ion-item>
+                <ion-label position="stacked">{{ i18n.text('vehicleMaxWeight') }}</ion-label>
+                <ion-input formControlName="maxWeightKg" type="number" min="1" max="100000" />
+              </ion-item>
+              <ion-item>
+                <ion-label position="stacked">{{ i18n.text('vehicleMaxHeight') }}</ion-label>
+                <ion-input formControlName="maxHeightCm" type="number" min="1" max="1000" />
+              </ion-item>
+              <ion-item>
+                <ion-label position="stacked">{{ i18n.text('vehicleMaxLength') }}</ion-label>
+                <ion-input formControlName="maxLengthCm" type="number" min="1" max="3000" />
+              </ion-item>
+            </div>
+            <div class="actions form-actions">
+              <ion-button type="submit" [disabled]="saving()">
+                {{ saving() ? i18n.text('working') : i18n.text('saveVehicle') }}
+              </ion-button>
+              @if (editingId()) {
+                <ion-button fill="clear" [disabled]="saving()" (click)="cancelEdit()">
+                  {{ i18n.text('cancel') }}
+                </ion-button>
+              }
+            </div>
+          </form>
+        </ion-card-content>
+      </ion-card>
+    }
+  </main>
+</ion-content>

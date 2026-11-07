@@ -1,0 +1,29 @@
+services:
+  community-test-postgres:
+    image: postgis/postgis:16-3.5
+    container_name: smartroute-community-test-postgres
+    environment:
+      POSTGRES_DB: smartroute_community_test
+      POSTGRES_USER: smartroute_test
+      POSTGRES_PASSWORD: ${COMMUNITY_TEST_DB_PASSWORD:?Set a dedicated test-only password}
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - community-test-pgdata:/var/lib/postgresql/data
+      - ./database/test/001_community_incident_users.sql:/docker-entrypoint-initdb.d/01-community-test-users.sql:ro
+      - ./database/migrations/004_community_incidents.sql:/docker-entrypoint-initdb.d/02-community-incidents.sql:ro
+      - ./database/migrations/005_community_incident_audit.sql:/docker-entrypoint-initdb.d/03-community-incident-audit.sql:ro
+      - ./database/migrations/006_subscription_foundation.sql:/docker-entrypoint-initdb.d/04-subscription-foundation.sql:ro
+      - ./database/migrations/007_subscription_audit_actor_context.sql:/docker-entrypoint-initdb.d/05-subscription-audit-actor-context.sql:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U smartroute_test -d smartroute_community_test",
+        ]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  community-test-pgdata:

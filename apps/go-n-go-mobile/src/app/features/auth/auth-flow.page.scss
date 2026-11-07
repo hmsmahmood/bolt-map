@@ -1,0 +1,147 @@
+.flow-shell {
+  width: min(100% - 32px, 520px);
+  min-height: 100%;
+  margin: 0 auto;
+  padding: clamp(24px, 7vh, 68px) 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.back-link,
+.flow-link {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--gng-green);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-underline-offset: 4px;
+}
+
+.flow-card {
+  margin: 12px 0;
+  border: 1px solid var(--gng-border);
+  border-radius: 22px;
+  box-shadow: 0 18px 50px rgb(14 41 37 / 7%);
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  color: var(--gng-green);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+}
+
+ion-card-title {
+  color: var(--gng-ink);
+  font-size: 1.8rem;
+  font-weight: 750;
+  letter-spacing: -0.04em;
+}
+
+.intro,
+.hint {
+  color: var(--gng-muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+ion-item {
+  --background: transparent;
+  --border-color: var(--gng-border);
+  --padding-start: 0;
+  margin-top: 12px;
+}
+
+ion-label {
+  color: var(--gng-muted) !important;
+  font-size: 0.86rem !important;
+}
+
+ion-input {
+  --color: var(--gng-ink);
+  --padding-bottom: 11px;
+  --padding-top: 11px;
+  min-height: 46px;
+}
+
+.phone-row {
+  display: grid;
+  grid-template-columns: minmax(100px, 0.35fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.terms-row {
+  margin-top: 20px;
+  color: var(--gng-ink);
+  line-height: 1.5;
+}
+
+ion-checkbox {
+  --checkbox-background-checked: var(--gng-green);
+  --border-color-checked: var(--gng-green);
+  font-size: 0.88rem;
+}
+
+.submit-button {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 22px;
+  border: 0;
+  border-radius: 12px;
+  color: white;
+  background: var(--gng-green);
+  font-size: 0.98rem;
+  font-weight: 750;
+}
+
+.submit-button:disabled {
+  opacity: 0.6;
+}
+
+.danger-button {
+  background: #a13d37;
+}
+
+.form-error,
+.form-notice {
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.form-error {
+  color: #a13d37;
+}
+
+.form-notice {
+  color: var(--gng-green);
+}
+
+.setting-row,
+.session-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--gng-ink);
+}
+
+.session-row {
+  border-bottom: 1px solid var(--gng-border);
+  font-size: 0.84rem;
+}
+
+h2 {
+  margin: 28px 0 10px;
+  color: var(--gng-ink);
+  font-size: 1.1rem;
+}
+
+@media (max-width: 420px) {
+  .phone-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}

@@ -1,0 +1,108 @@
+@import '@ionic/angular/css/core.css';
+@import '@ionic/angular/css/normalize.css';
+@import '@ionic/angular/css/structure.css';
+@import '@ionic/angular/css/typography.css';
+
+:root {
+  --gng-green: #126c56;
+  --gng-ink: #122a26;
+  --gng-muted: #60716d;
+  --gng-border: #e2eae7;
+  --gng-border-strong: #c9d8d2;
+  --ion-font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ion-background-color: #f7faf8;
+  --ion-text-color: var(--gng-ink);
+  color-scheme: light;
+}
+
+html,
+body {
+  width: 100%;
+  min-width: 320px;
+  height: 100%;
+  margin: 0;
+  background: var(--ion-background-color);
+}
+
+body {
+  font-family: var(--ion-font-family);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.maplibregl-map {
+  position: relative;
+  overflow: hidden;
+  font: 12px/20px Arial, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+.maplibregl-canvas-container {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.maplibregl-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.maplibregl-canvas-container.maplibregl-interactive {
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.maplibregl-canvas-container.maplibregl-interactive:active {
+  cursor: grabbing;
+}
+
+.maplibregl-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
+}
+
+.maplibregl-ctrl-attrib {
+  display: none;
+}
+
+ion-app {
+  background:
+    radial-gradient(ellipse at 86% 20%, rgb(196 226 211 / 28%), transparent 34rem),
+    var(--ion-background-color);
+}
+
+body.map-route-active,
+body.map-route-active ion-app,
+body.map-route-active ion-router-outlet,
+body.map-route-active ion-content,
+body.map-route-active .ion-page {
+  background: transparent !important;
+}
+
+ion-toolbar {
+  --background: transparent;
+  --border-color: transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --gng-green: #78d3ad;
+    --gng-ink: #eff8f3;
+    --gng-muted: #a7bbb2;
+    --gng-border: #263c35;
+    --gng-border-strong: #3a554b;
+    --ion-background-color: #101b18;
+    --ion-text-color: var(--gng-ink);
+    color-scheme: dark;
+  }
+}

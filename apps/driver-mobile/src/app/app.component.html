@@ -1,0 +1,69 @@
+<main class="driver-shell">
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">SMARTROUTE</p>
+      <h1>Driver console</h1>
+    </div>
+    <div class="presence">
+      <span class="dot"></span>
+      <span>{{ status }}</span>
+    </div>
+  </header>
+
+  <section class="hero-card">
+    <div class="hero-meta">
+      <p>Current dispatch</p>
+      <strong>Route 12 ? KL to Cyberjaya</strong>
+    </div>
+    <div class="eta-row">
+      <div>
+        <span class="label">ETA</span>
+        <strong>09:12</strong>
+      </div>
+      <button class="primary-btn">Start trip</button>
+    </div>
+  </section>
+
+  <section class="metrics" *ngIf="metrics.length">
+    <article class="metric" *ngFor="let metric of metrics">
+      <span>{{ metric.label }}</span>
+      <strong>{{ metric.value }}</strong>
+      <small>{{ metric.delta }}</small>
+    </article>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <h2>Route progress</h2>
+      <span>4 / 6 stops</span>
+    </div>
+
+    <div class="stop-list">
+      <div class="stop" *ngFor="let stop of routeStops; let i = index" [class.active]="i === 1">
+        <div class="marker"></div>
+        <div>
+          <strong>{{ stop.name }}</strong>
+          <small>{{ stop.status }}</small>
+        </div>
+        <span>{{ stop.eta }}</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel warning-panel">
+    <div class="panel-header">
+      <h2>Live operational alerts</h2>
+      <span>3 active</span>
+    </div>
+    <ul>
+      <li *ngFor="let alert of alerts">{{ alert }}</li>
+    </ul>
+  </section>
+
+  <nav class="bottom-nav" aria-label="Main navigation">
+    <button class="nav-item active">Home</button>
+    <button class="nav-item">Routes</button>
+    <button class="nav-item">Safety</button>
+    <button class="nav-item">Profile</button>
+  </nav>
+</main>

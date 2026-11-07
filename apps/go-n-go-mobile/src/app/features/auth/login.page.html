@@ -1,0 +1,54 @@
+<ion-content [fullscreen]="true">
+  <main class="login-shell">
+    <a class="back-link" routerLink="/">{{ i18n.text('backHome') }}</a>
+
+    <ion-card class="login-card">
+      <ion-card-header>
+        <p class="eyebrow">{{ i18n.text('eyebrow') }}</p>
+        <ion-card-title>{{ i18n.text('authTitle') }}</ion-card-title>
+        <p class="intro">{{ i18n.text('authIntro') }}</p>
+      </ion-card-header>
+
+      <ion-card-content>
+        <form [formGroup]="form" (ngSubmit)="submit()">
+          <ion-item>
+            <ion-label position="stacked">{{ i18n.text('email') }}</ion-label>
+            <ion-input
+              type="email"
+              autocomplete="username"
+              inputmode="email"
+              formControlName="email"
+            ></ion-input>
+          </ion-item>
+          @if (form.controls.email.touched && form.controls.email.invalid) {
+            <p class="field-error" role="alert">{{ i18n.text('emailInvalid') }}</p>
+          }
+
+          <ion-item>
+            <ion-label position="stacked">{{ i18n.text('password') }}</ion-label>
+            <ion-input
+              type="password"
+              autocomplete="current-password"
+              formControlName="password"
+            ></ion-input>
+          </ion-item>
+          @if (form.controls.password.touched && form.controls.password.invalid) {
+            <p class="field-error" role="alert">{{ i18n.text('passwordMinimum') }}</p>
+          }
+
+          @if (error()) {
+            <p class="form-error" role="alert">{{ errorMessage }}</p>
+          }
+
+          <ion-button expand="block" type="submit" [disabled]="loading()">
+            {{ loading() ? i18n.text('loggingIn') : i18n.text('login') }}
+          </ion-button>
+        </form>
+
+        <p class="availability-note">{{ i18n.text('authExistingOnly') }}</p>
+        <a class="flow-link" routerLink="/forgot-password">{{ i18n.text('forgotPasswordTitle') }}</a>
+        <a class="flow-link" routerLink="/register">{{ i18n.text('register') }}</a>
+      </ion-card-content>
+    </ion-card>
+  </main>
+</ion-content>

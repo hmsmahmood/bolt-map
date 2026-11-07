@@ -1,0 +1,219 @@
+:host {
+  display: block;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #0d1727 0%, #111f32 100%);
+  color: #edf6ff;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button {
+  font: inherit;
+}
+
+.rider-shell {
+  max-width: 430px;
+  margin: 0 auto;
+  padding: 24px 18px 30px;
+}
+
+.topbar,
+.card-header,
+.summary-header,
+.trip-details,
+.checkpoint,
+.cta-row {
+  display: flex;
+  align-items: center;
+}
+
+.topbar,
+.card-header,
+.summary-header,
+.trip-details,
+.cta-row {
+  justify-content: space-between;
+}
+
+.eyebrow,
+.label,
+small {
+  color: rgba(191, 219, 254, 0.8);
+}
+
+h1,
+h2,
+p,
+strong,
+small,
+span,
+ul,
+li,
+button {
+  margin: 0;
+}
+
+h1 {
+  margin-top: 6px;
+  font-size: 1.9rem;
+}
+
+.ghost-btn,
+.link-btn,
+.secondary-btn,
+.primary-btn {
+  border-radius: 12px;
+  border: none;
+  font-weight: 600;
+}
+
+.ghost-btn {
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.25);
+  color: #bfdbfe;
+  padding: 9px 12px;
+}
+
+.map-card,
+.card {
+  margin-top: 18px;
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 24px;
+  padding: 18px 16px;
+}
+
+.route-pill {
+  display: inline-flex;
+  background: rgba(34, 197, 94, 0.14);
+  border: 1px solid rgba(134, 239, 172, 0.35);
+  color: #bbf7d0;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.map-graphic {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  margin: 20px 0 16px;
+}
+
+.route-line {
+  height: 4px;
+  background: linear-gradient(90deg, #38bdf8 0%, #7c3aed 100%);
+  border-radius: 999px;
+}
+
+.map-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #7dd3fc;
+  box-shadow: 0 0 0 8px rgba(125, 211, 252, 0.15);
+}
+
+.map-dot.end {
+  background: #8b5cf6;
+  box-shadow: 0 0 0 8px rgba(139, 92, 246, 0.15);
+}
+
+.route-pairs {
+  display: grid;
+  gap: 12px;
+}
+
+.route-pairs strong,
+.trip-details strong,
+.checkpoint strong {
+  display: block;
+  margin-top: 6px;
+}
+
+.summary-card {
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.18), rgba(8, 47, 73, 0.42));
+}
+
+.rating {
+  background: rgba(253, 224, 71, 0.12);
+  border: 1px solid rgba(253, 224, 71, 0.26);
+  color: #fde68a;
+  border-radius: 999px;
+  padding: 8px 10px;
+  font-size: 0.82rem;
+}
+
+.trip-details {
+  margin-top: 18px;
+  gap: 16px;
+}
+
+.card-header {
+  margin-bottom: 14px;
+}
+
+.link-btn {
+  background: rgba(59, 130, 246, 0.14);
+  color: #bfdbfe;
+  padding: 8px 10px;
+}
+
+.checkpoints {
+  display: grid;
+  gap: 12px;
+}
+
+.checkpoint {
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.checkpoint-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(148, 163, 184, 0.6);
+  box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.18);
+}
+
+.checkpoint.active .checkpoint-dot {
+  background: #22c55e;
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.18);
+}
+
+.tips {
+  display: grid;
+  gap: 8px;
+  padding-left: 18px;
+  margin: 0;
+  color: rgba(219, 234, 254, 0.88);
+}
+
+.cta-row {
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.secondary-btn,
+.primary-btn {
+  flex: 1;
+  padding: 14px 16px;
+}
+
+.secondary-btn {
+  background: rgba(148, 163, 184, 0.1);
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.primary-btn {
+  background: linear-gradient(135deg, #60a5fa, #8b5cf6);
+  color: white;
+  box-shadow: 0 12px 24px rgba(96, 165, 250, 0.22);
+}

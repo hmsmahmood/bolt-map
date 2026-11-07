@@ -1,0 +1,226 @@
+<div class="app-shell">
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Operations command</p>
+      <h1>{{ title }}</h1>
+    </div>
+    <div class="topbar-tools">
+      <div class="tab-nav" role="tablist" aria-label="Dashboard views">
+        <button type="button" class="tab-button" [class.active]="activeTab === 'overview'" (click)="activeTab = 'overview'">Overview</button>
+        <button type="button" class="tab-button" [class.active]="activeTab === 'navigation'" (click)="activeTab = 'navigation'">Navigation</button>
+        <button type="button" class="tab-button" [class.active]="activeTab === 'fleet'" (click)="activeTab = 'fleet'">Fleet</button>
+      </div>
+      <div class="status-pill">
+        <span class="live-dot"></span>
+        {{ isAuthenticated ? 'Operator online' : 'Live telemetry' }}
+      </div>
+    </div>
+  </header>
+
+  <section class="login-panel" *ngIf="!isAuthenticated">
+    <div class="login-copy">
+      <p class="eyebrow">Secure access</p>
+      <h2>Malaysia road intelligence workspace</h2>
+    </div>
+    <form class="login-form" (ngSubmit)="login()">
+      <label>
+        Email
+        <input type="email" [(ngModel)]="loginForm.email" name="email" required />
+      </label>
+      <label>
+        Password
+        <input type="password" [(ngModel)]="loginForm.password" name="password" required />
+      </label>
+      <button type="submit">Sign in</button>
+      <small>{{ loginStatus || 'Demo login: ops@smartroute.ai / SmartRoute2025!' }}</small>
+    </form>
+  </section>
+
+  <main class="dashboard" *ngIf="isAuthenticated && !loading && dashboard; else loadingTemplate">
+    <section class="hero-panel">
+      <div>
+        <p class="eyebrow">Malaysia network overview</p>
+        <h2>Road intelligence and fleet orchestration</h2>
+      </div>
+      <div class="hero-summary">
+        <span class="summary-label">Alerts</span>
+        <strong>{{ dashboard.overview.liveAlerts }}</strong>
+      </div>
+    </section>
+
+    <section class="metrics-grid">
+      <article class="metric-card accent-blue">
+        <span>Active trips</span>
+        <strong>{{ dashboard.overview.activeTrips }}</strong>
+      </article>
+      <article class="metric-card accent-green">
+        <span>Safe miles</span>
+        <strong>{{ dashboard.overview.safeMiles }}k</strong>
+      </article>
+      <article class="metric-card accent-gold">
+        <span>Delivery efficiency</span>
+        <strong>{{ dashboard.overview.deliveryEfficiency }}%</strong>
+      </article>
+      <article class="metric-card accent-red">
+        <span>Live alerts</span>
+        <strong>{{ dashboard.overview.liveAlerts }}</strong>
+      </article>
+    </section>
+
+    <section class="content-grid" *ngIf="activeTab === 'overview'">
+      <div class="panel routes-panel">
+        <div class="panel-header">
+          <h3>Priority routes</h3>
+          <button type="button">View map</button>
+        </div>
+        <div class="route-card" *ngFor="let route of dashboard.routes">
+          <div>
+            <div class="route-meta">
+              <span class="route-id">{{ route.id }}</span>
+              <span class="priority-tag" [ngClass]="route.priority.toLowerCase()">{{ route.priority }}</span>
+            </div>
+            <h4>{{ route.title }}</h4>
+            <p>{{ route.driver }} · {{ route.status }}</p>
+          </div>
+          <div class="route-progress">
+            <div class="route-bar">
+              <span [style.width.%]="route.progress"></span>
+            </div>
+            <small>{{ route.eta }}</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel alerts-panel">
+        <div class="panel-header">
+          <h3>Road intelligence</h3>
+          <button type="button">Sync data</button>
+        </div>
+        <ul class="alert-list">
+          <li *ngFor="let item of dashboard.alertFeed">
+            <span class="bullet"></span>
+            <span>{{ item }}</span>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="bottom-grid" *ngIf="activeTab === 'overview'">
+      <div class="panel incident-panel">
+        <div class="panel-header">
+          <h3>Incidents</h3>
+          <button type="button">Review</button>
+        </div>
+        <div class="incident-row" *ngFor="let incident of dashboard.incidents">
+          <div>
+            <strong>{{ incident.type }}</strong>
+            <p>{{ incident.location }}</p>
+          </div>
+          <div class="incident-meta">
+            <span class="severity" [ngClass]="incident.severity.toLowerCase()">{{ incident.severity }}</span>
+            <small>{{ incident.status }}</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel fleet-panel">
+        <div class="panel-header">
+          <h3>Fleet</h3>
+          <button type="button">Dispatch</button>
+        </div>
+        <div class="fleet-row" *ngFor="let vehicle of dashboard.fleet">
+          <div>
+            <strong>{{ vehicle.id }}</strong>
+            <p>{{ vehicle.driver }}</p>
+          </div>
+          <div class="fleet-stats">
+            <span>{{ vehicle.status }}</span>
+            <small>{{ vehicle.battery }}% battery</small>
+            <small>{{ vehicle.speed }} km/h</small>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="two-column-layout" *ngIf="activeTab === 'navigation'">
+      <div class="panel">
+        <div class="panel-header">
+          <h3>Flood intelligence</h3>
+          <button type="button">AI forecast</button>
+        </div>
+        <div class="mini-list" *ngIf="dashboard.floodAlerts">
+          <div class="mini-item" *ngFor="let flood of dashboard.floodAlerts">
+            <div>
+              <strong>{{ flood.area }}</strong>
+              <p>{{ flood.level }} · {{ flood.rainfall }}</p>
+            </div>
+            <small>{{ flood.action }}</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <h3>Safety signals</h3>
+          <button type="button">Risk map</button>
+        </div>
+        <div class="safety-row" *ngFor="let signal of dashboard.safetySignals">
+          <div>
+            <strong>{{ signal.zone }}</strong>
+            <p>{{ signal.risk }} risk</p>
+          </div>
+          <div class="safety-score">{{ signal.score }}/100</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="two-column-layout" *ngIf="activeTab === 'fleet'">
+      <div class="panel">
+        <div class="panel-header">
+          <h3>Dispatch health</h3>
+          <button type="button">Schedule</button>
+        </div>
+        <div class="admin-grid">
+          <div class="admin-card">
+            <span>Compliance</span>
+            <strong>{{ dashboard.adminScores?.compliance }}%</strong>
+          </div>
+          <div class="admin-card">
+            <span>Coverage</span>
+            <strong>{{ dashboard.adminScores?.coverage }}%</strong>
+          </div>
+          <div class="admin-card">
+            <span>Uptime</span>
+            <strong>{{ dashboard.adminScores?.uptime }}%</strong>
+          </div>
+          <div class="admin-card">
+            <span>Response</span>
+            <strong>{{ dashboard.adminScores?.response }} min</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <h3>Operator status</h3>
+          <button type="button">Manage</button>
+        </div>
+        <div class="operator-status">
+          <div>
+            <strong>{{ sessionUser || 'Aisha Rahman' }}</strong>
+            <p>Fleet operations manager</p>
+          </div>
+          <span class="online-badge">Online</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <ng-template #loadingTemplate>
+    <div class="loading-state" *ngIf="isAuthenticated">
+      <div class="spinner"></div>
+      <p *ngIf="!error">Loading SMARTROUTE AI intelligence...</p>
+      <p *ngIf="error" class="error-text">{{ error }}</p>
+    </div>
+  </ng-template>
+</div>

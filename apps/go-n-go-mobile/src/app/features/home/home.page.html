@@ -1,0 +1,77 @@
+<ion-header class="app-header">
+  <ion-toolbar>
+    <div class="toolbar-inner">
+      <div class="brand" aria-label="Go 'n Go">
+        <span class="brand-mark" aria-hidden="true">G</span>
+        <span>Go 'n Go</span>
+      </div>
+      <div class="locale-control">
+        <ion-select
+          [value]="i18n.locale()"
+          interface="popover"
+          [attr.aria-label]="i18n.text('language')"
+          (ionChange)="setLocale($event)"
+        >
+          <ion-select-option value="en">English</ion-select-option>
+          <ion-select-option value="ms">Bahasa Malaysia</ion-select-option>
+          <ion-select-option value="ta">தமிழ்</ion-select-option>
+        </ion-select>
+      </div>
+    </div>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <div class="page-shell">
+    <section class="hero" aria-labelledby="hero-title">
+      <p class="eyebrow">{{ i18n.text('eyebrow') }} <span></span> MALAYSIA</p>
+      <h1 id="hero-title">{{ i18n.text('title') }}</h1>
+      <p class="intro">{{ i18n.text('introduction') }}</p>
+
+      <div class="account-row">
+        @if (auth.user(); as user) {
+          <span>{{ i18n.text('signedInAs') }} {{ user.name }}</span>
+          <a class="sign-in-link" routerLink="/vehicle-profiles">{{ i18n.text('vehicleProfilesTitle') }}</a>
+          <a class="sign-in-link" routerLink="/security">{{ i18n.text('securityTitle') }}</a>
+          <a class="sign-in-link" routerLink="/logout-confirm">{{ i18n.text('signOut') }}</a>
+        } @else {
+          <a class="sign-in-link" routerLink="/login">{{ i18n.text('signIn') }}</a>
+          <a class="sign-in-link" routerLink="/register">{{ i18n.text('register') }}</a>
+        }
+        <a class="sign-in-link" routerLink="/map">{{ i18n.text('mapLink') }}</a>
+      </div>
+      @if (auth.sessionRestoreFailed()) {
+        <p class="auth-notice" role="alert">{{ i18n.text('sessionRestoreFailed') }}</p>
+      }
+
+      <ion-card class="connection-card">
+        <ion-card-header>
+          <ion-card-title>{{ i18n.text('connectionTitle') }}</ion-card-title>
+        </ion-card-header>
+        <ion-card-content>
+          <div class="connection-status" [class]="connectionState()">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span role="status" aria-live="polite">{{ connectionMessage }}</span>
+          </div>
+          @if (connectionDetail()) {
+            <p class="connection-detail">{{ connectionDetail() }}</p>
+          } @else if (connectionState() === 'unconfigured') {
+            <p class="connection-detail">{{ i18n.text('connectionConfigHint') }}</p>
+          } @else if (connectionState() === 'offline') {
+            <p class="connection-detail">{{ i18n.text('backendHint') }}</p>
+          }
+          <ion-button
+            expand="block"
+            fill="outline"
+            [disabled]="connectionState() === 'checking'"
+            (click)="checkConnection()"
+          >
+            {{ i18n.text('checkConnection') }}
+          </ion-button>
+        </ion-card-content>
+      </ion-card>
+    </section>
+
+    <footer>{{ i18n.text('footer') }}</footer>
+  </div>
+</ion-content>

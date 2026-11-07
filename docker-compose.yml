@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.5
+    container_name: smartroute-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: smartroute
+      POSTGRES_USER: smartroute
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your environment}
+    ports:
+      - '127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+
+  redis:
+    image: redis:7-alpine
+    container_name: smartroute-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+
+  osrm:
+    image: osrm/osrm-backend
+    container_name: smartroute-osrm
+    profiles:
+      - routing
+    command: osrm-routed --algorithm mld /data/malaysia-latest.osrm
+    ports:
+      - '127.0.0.1:5000:5000'
+    volumes:
+      - ./maps:/data:ro
+
+  valhalla:
+    image: ghcr.io/valhalla/valhalla-scripted:latest@sha256:e2078b638205fba6ef246d8ae731d7f197b346a0ebc74fb5f41b01db50504c90
+    container_name: smartroute-valhalla
+    profiles:
+      - routing
+    ports:
+      - '127.0.0.1:${VALHALLA_HOST_PORT:-8002}:8002'
+    environment:
+      build_admins: 'True'
+      build_elevation: 'False'
+      build_time_zones: 'True'
+      build_transit: 'False'
+      server_threads: ${VALHALLA_SERVER_THREADS:-4}
+    volumes:
+      - ./maps:/custom_files
+
+  tileserver:
+    image: maptiler/tileserver-gl:v5.7.0
+    container_name: smartroute-tileserver
+    profiles:
+      - maps
+    command:
+      - --config
+      - /data/tileserver-gl-config.json
+      - --public_url
+      - http://localhost:8080/
+    ports:
+      - '127.0.0.1:8080:8080'
+    volumes:
+      - ./maps/malaysia-singapore-brunei-shortbread-1.0.mbtiles:/data/malaysia-singapore-brunei-shortbread-1.0.mbtiles:ro
+      - ./maps/tileserver-gl-config.json:/data/tileserver-gl-config.json:ro
+
+volumes:
+  pgdata:

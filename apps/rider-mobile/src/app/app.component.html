@@ -1,0 +1,79 @@
+<main class="rider-shell">
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">SMARTROUTE</p>
+      <h1>Ride home</h1>
+    </div>
+    <button class="ghost-btn">Safety</button>
+  </header>
+
+  <section class="map-card">
+    <div class="route-pill">{{ status }}</div>
+    <div class="map-graphic">
+      <div class="map-dot start"></div>
+      <div class="route-line"></div>
+      <div class="map-dot end"></div>
+    </div>
+    <div class="route-pairs">
+      <div>
+        <span class="label">Pickup</span>
+        <strong>{{ trip.pickup }}</strong>
+      </div>
+      <div>
+        <span class="label">Drop-off</span>
+        <strong>{{ trip.dropoff }}</strong>
+      </div>
+    </div>
+  </section>
+
+  <section class="card summary-card">
+    <div class="summary-header">
+      <div>
+        <span class="label">Driver</span>
+        <strong>{{ trip.driver }}</strong>
+      </div>
+      <div class="rating">? {{ trip.rating }}</div>
+    </div>
+    <div class="trip-details">
+      <div>
+        <span class="label">ETA</span>
+        <strong>{{ trip.eta }}</strong>
+      </div>
+      <div>
+        <span class="label">Fare</span>
+        <strong>{{ trip.fare }}</strong>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-header">
+      <h2>Trip tracker</h2>
+      <button class="link-btn">Live</button>
+    </div>
+
+    <div class="checkpoints" *ngIf="checkpoints.length">
+      <div class="checkpoint" *ngFor="let checkpoint of checkpoints" [class.active]="checkpoint.active">
+        <span class="checkpoint-dot"></span>
+        <div>
+          <strong>{{ checkpoint.label }}</strong>
+          <small>{{ checkpoint.time }}</small>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-header">
+      <h2>Safety info</h2>
+    </div>
+    <ul class="tips">
+      <li *ngFor="let tip of safetyTips">{{ tip }}</li>
+    </ul>
+  </section>
+
+  <div class="cta-row">
+    <button class="secondary-btn">Call driver</button>
+    <button class="primary-btn">Share trip</button>
+  </div>
+</main>

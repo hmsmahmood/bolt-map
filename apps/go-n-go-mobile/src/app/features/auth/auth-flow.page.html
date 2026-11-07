@@ -1,0 +1,191 @@
+<ion-content [fullscreen]="true">
+  <main class="flow-shell">
+    <a class="back-link" routerLink="/">{{ i18n.text('backHome') }}</a>
+
+    <ion-card class="flow-card">
+      <ion-card-header>
+        <p class="eyebrow">{{ i18n.text('eyebrow') }}</p>
+        <ion-card-title>{{ title }}</ion-card-title>
+        @if (mode !== 'security' && mode !== 'logout') {
+          <p class="intro">{{ i18n.text('authFlowIntro') }}</p>
+        }
+      </ion-card-header>
+
+      <ion-card-content>
+        @if (mode === 'register') {
+          <form [formGroup]="registrationForm" (ngSubmit)="submit()">
+            <ion-item>
+              <ion-label position="stacked">{{ i18n.text('fullName') }}</ion-label>
+              <ion-input autocomplete="name" formControlName="fullName"></ion-input>
+            </ion-item>
+            <ion-item>
+              <ion-label position="stacked">{{ i18n.text('email') }}</ion-label>
+              <ion-input type="email" autocomplete="email" formControlName="email"></ion-input>
+            </ion-item>
+            <div class="phone-row">
+              <ion-item class="country-code">
+                <ion-label position="stacked">{{ i18n.text('countryCode') }}</ion-label>
+                <ion-input inputmode="tel" formControlName="countryCode"></ion-input>
+              </ion-item>
+              <ion-item class="mobile-number">
+                <ion-label position="stacked">{{ i18n.text('mobileNumber') }}</ion-label>
+                <ion-input type="tel" autocomplete="tel-national" formControlName="mobileNumber"></ion-input>
+              </ion-item>
+            </div>
+            <ion-item>
+              <ion-label position="stacked">{{ i18n.text('password') }}</ion-label>
+              <ion-input type="password" autocomplete="new-password" formControlName="password"></ion-input>
+            </ion-item>
+            <ion-item>
+              <ion-label position="stacked">{{ i18n.text('confirmPassword') }}</ion-label>
+              <ion-input type="password" autocomplete="new-password" formControlName="confirmPassword"></ion-input>
+            </ion-item>
+            <p class="hint">{{ i18n.text('passwordPolicy') }}</p>
+            <div class="terms-row">
+              <ion-checkbox formControlName="termsAccepted" labelPlacement="end">
+                {{ i18n.text('termsAcceptance') }}
+              </ion-checkbox>
+            </div>
+            <button class="submit-button" type="submit" [disabled]="loading()">
+              {{ loading() ? i18n.text('working') : submitLabel }}
+            </button>
+          </form>
+        } @else if (mode === 'verify-email' || mode === 'reset-password') {
+          <form [formGroup]="tokenForm" (ngSubmit)="submit()">
+            <ion-item>
+              <ion-label position="stacked">{{ i18n.text('emailLinkToken') }}</ion-label>
+              <ion-input formControlName="token" autocomplete="one-time-code"></ion-input>
+            </ion-item>
+            @if (mode === 'reset-password') {
+              <ion-item>
+                <ion-label position="stacked">{{ i18n.text('newPassword') }}</ion-label>
+                <ion-input type="password" autocomplete="new-password" formControlName="password"></ion-input>
+              </ion-item>
+              <ion-item>
+                <ion-label position="stacked">{{ i18n.text('confirmPassword') }}</ion-label>
+                <ion-input type="password" autocomplete="new-password" formControlName="confirmPassword"></ion-input>
+              </ion-item>
+              <p class="hint">{{ i18n.text('passwordPolicy') }}</p>
+            }
+            <button class="submit-button" type="submit" [disabled]="loading()">
+              {{ loading() ? i18n.text('working') : submitLabel }}
+            </button>
+          </form>
+          @if (mode === 'verify-email') {
+            <form [formGroup]="emailForm" (ngSubmit)="resendVerificationEmail()">
+              <ion-item>
+                <ion-label position="stacked">{{ i18n.text('email') }}</ion-label>
+                <ion-input type="email" autocomplete="email" formControlName="email"></ion-input>
+              </ion-item>
+              <ion-button expand="block" fill="clear" type="submit" [disabled]="loading()">
+                {{ i18n.text('resendVerification') }}
+              </ion-button>
+            </form>
+          }
+        } @else if (mode === 'otp') {
+          <form [formGroup]="otpForm" (ngSubmit)="submit()">
+            <p class="intro">{{ i18n.text('otpIntro') }}</p>
+            <ion-item>
+              <ion-label position="stacked">{{ i18n.text('oneTimeCode') }}</ion-label>
+              <ion-input
+                type="text"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                maxlength="6"
+                formControlName="code"
+              ></ion-input>
+            </ion-item>
+            <button class="submit-button" type="submit" [disabled]="loading()">
+              {{ loading() ? i18n.text('working') : submitLabel }}
+            </button>
+            <ion-button expand="block" fill="clear" [disabled]="loading()" (click)="resendOtp()">
+              {{ i18n.text('resendCode') }}
+            </ion-button>
+          </form>
+        } @else if (mode === 'forgot-password') {
+          <form [formGroup]="emailForm" (ngSubmit)="submit()">
+            <ion-item>
+              <ion-label position="stacked">{{ i18n.text('email') }}</ion-label>
+              <ion-input type="email" autocomplete="email" formControlName="email"></ion-input>
+            </ion-item>
+            <button class="submit-button" type="submit" [disabled]="loading()">
+              {{ loading() ? i18n.text('working') : submitLabel }}
+            </button>
+          </form>
+        } @else if (mode === 'change-password') {
+          <form [formGroup]="changePasswordForm" (ngSubmit)="submit()">
+            <ion-item>
+              <ion-label position="stacked">{{ i18n.text('currentPassword') }}</ion-label>
+              <ion-input type="password" autocomplete="current-password" formControlName="currentPassword"></ion-input>
+            </ion-item>
+            <ion-item>
+              <ion-label position="stacked">{{ i18n.text('newPassword') }}</ion-label>
+              <ion-input type="password" autocomplete="new-password" formControlName="password"></ion-input>
+            </ion-item>
+            <ion-item>
+              <ion-label position="stacked">{{ i18n.text('confirmPassword') }}</ion-label>
+              <ion-input type="password" autocomplete="new-password" formControlName="confirmPassword"></ion-input>
+            </ion-item>
+            <p class="hint">{{ i18n.text('passwordPolicy') }}</p>
+            <button class="submit-button" type="submit" [disabled]="loading()">
+              {{ loading() ? i18n.text('working') : submitLabel }}
+            </button>
+          </form>
+        } @else if (mode === 'security') {
+          <section aria-label="Account security settings">
+            <p class="setting-row">
+              <span>{{ i18n.text('emailOtpMfa') }}</span>
+              <strong>{{ emailMfaEnabled() ? i18n.text('enabled') : i18n.text('disabled') }}</strong>
+            </p>
+            <ion-button
+              expand="block"
+              fill="outline"
+              [disabled]="loading()"
+              (click)="requestMfaChange(emailMfaEnabled() ? 'disable' : 'enable')"
+            >
+              {{ emailMfaEnabled() ? i18n.text('disableMfa') : i18n.text('enableMfa') }}
+            </ion-button>
+            <h2>{{ i18n.text('activeSessions') }}</h2>
+            @for (session of sessions(); track session.id) {
+              <div class="session-row">
+                <span>{{ session.userAgent || i18n.text('unknownDevice') }}</span>
+                <ion-button fill="clear" color="danger" [disabled]="loading()" (click)="revokeSession(session.id)">
+                  {{ i18n.text('revoke') }}
+                </ion-button>
+              </div>
+            } @empty {
+              <p class="hint">{{ i18n.text('noSessions') }}</p>
+            }
+            <a class="flow-link" routerLink="/change-password">{{ i18n.text('changePassword') }}</a>
+            <ion-button expand="block" fill="clear" color="danger" [disabled]="loading()" (click)="logoutAll()">
+              {{ i18n.text('signOutAll') }}
+            </ion-button>
+          </section>
+        } @else {
+          <p class="intro">{{ i18n.text('logoutConfirmIntro') }}</p>
+          <button class="submit-button danger-button" type="button" [disabled]="loading()" (click)="submit()">
+            {{ loading() ? i18n.text('working') : submitLabel }}
+          </button>
+          <a class="flow-link" routerLink="/">{{ i18n.text('cancel') }}</a>
+        }
+
+        @if (mode === 'security' && loading()) {
+          <p class="hint" role="status" aria-live="polite">{{ i18n.text('working') }}</p>
+        }
+        @if (error()) {
+          <p class="form-error" role="alert">{{ error() }}</p>
+        }
+        @if (notice()) {
+          <p class="form-notice" role="status" aria-live="polite">{{ notice() }}</p>
+        }
+        @if (mode === 'register') {
+          <a class="flow-link" routerLink="/login">{{ i18n.text('signIn') }}</a>
+        } @else if (mode === 'otp' || mode === 'verify-email') {
+          <a class="flow-link" routerLink="/login">{{ i18n.text('backToSignIn') }}</a>
+        } @else if (mode === 'forgot-password') {
+          <a class="flow-link" routerLink="/login">{{ i18n.text('backToSignIn') }}</a>
+        }
+      </ion-card-content>
+    </ion-card>
+  </main>
+</ion-content>

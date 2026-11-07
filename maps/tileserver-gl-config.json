@@ -1,0 +1,19 @@
+{
+  "options": {
+    "paths": {
+      "root": "/data",
+      "fonts": "/usr/src/app/node_modules/tileserver-gl-styles/fonts"
+    },
+    "allowedHosts": "localhost,127.0.0.1",
+    "serveAllFonts": true,
+    "serveStaticMaps": false,
+    "frontPage": false,
+    "staticAttributionText": "© OpenStreetMap contributors · Geofabrik · ODbL 1.0"
+  },
+  "styles": {},
+  "data": {
+    "malaysia-singapore-brunei-shortbread-1.0": {
+      "mbtiles": "/data/malaysia-singapore-brunei-shortbread-1.0.mbtiles"
+    }
+  }
+}

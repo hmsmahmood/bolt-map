@@ -1,0 +1,45 @@
+{
+  "name": "smartroute-ai",
+  "private": true,
+  "version": "1.0.0",
+  "description": "SMARTROUTE AI monorepo for Malaysian smart navigation, road safety, and fleet operations.",
+  "workspaces": [
+    "apps/*"
+  ],
+  "overrides": {
+    "js-yaml": "5.5.0",
+    "multer": "2.5.0"
+  },
+  "scripts": {
+    "backend": "npm --prefix apps/backend-api run start:dev",
+    "frontend": "npm --prefix apps/admin-web run start",
+    "driver": "npm --prefix apps/driver-mobile run start -- --host 0.0.0.0 --port 4201",
+    "rider": "npm --prefix apps/rider-mobile run start -- --host 0.0.0.0 --port 4202",
+    "gonngo": "npm --prefix apps/go-n-go-mobile run start",
+    "build:backend": "npm --prefix apps/backend-api run build",
+    "build:frontend": "npm --prefix apps/admin-web run build",
+    "build:driver": "npm --prefix apps/driver-mobile run build",
+    "build:rider": "npm --prefix apps/rider-mobile run build",
+    "build:gonngo": "npm --prefix apps/go-n-go-mobile run build",
+    "test:backend": "npm --prefix apps/backend-api run test -- --runInBand"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.2.8",
+    "@nestjs/core": "^11.2.8",
+    "@nestjs/jwt": "^11.0.2",
+    "@nestjs/passport": "^11.0.5",
+    "@nestjs/platform-express": "^11.2.8",
+    "@nestjs/swagger": "^11.4.7",
+    "@nestjs/testing": "^11.2.8",
+    "@nestjs/typeorm": "^11.0.3",
+    "argon2": "^0.45.1",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "pg": "^8.23.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "typeorm": "^1.1.2"
+  }
+}
