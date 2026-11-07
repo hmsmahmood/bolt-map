@@ -1,8 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-
-type SubscriptionStatus =
-  'pending' | 'active' | 'grace_period' | 'canceled' | 'expired' | 'revoked';
+import type { SubscriptionStatus } from '../entities/user-subscription.entity';
 
 type EntitlementResolution =
   | 'no_active_subscription'

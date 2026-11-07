@@ -5,7 +5,7 @@ import {
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { SubscriptionService } from './subscription.service';
@@ -15,6 +15,7 @@ type AuthenticatedRequest = Request & { user?: { id?: string } };
 @Controller('api/v1/subscriptions')
 @UseGuards(AuthGuard)
 @ApiTags('Subscriptions')
+@ApiBearerAuth()
 export class SubscriptionsController {
   constructor(private readonly subscriptions: SubscriptionService) {}
 
