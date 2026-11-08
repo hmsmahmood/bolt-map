@@ -39,6 +39,12 @@ import { VehicleProfileController } from './vehicles/vehicle-profile.controller'
 import { VehicleProfileService } from './vehicles/vehicle-profile.service';
 import { SubscriptionsController } from './subscriptions/subscriptions.controller';
 import { SubscriptionService } from './subscriptions/subscription.service';
+import { SubscriptionEntitlementDefinition } from './entities/subscription-entitlement-definition.entity';
+import { SubscriptionPlanEntitlement } from './entities/subscription-plan-entitlement.entity';
+import { SubscriptionPlan } from './entities/subscription-plan.entity';
+import { SubscriptionStateEvent } from './entities/subscription-state-event.entity';
+import { SubscriptionTransactionReference } from './entities/subscription-transaction-reference.entity';
+import { UserSubscription } from './entities/user-subscription.entity';
 
 function getJwtSecret(): string {
   const configuredSecret = process.env.JWT_SECRET?.trim();
@@ -106,6 +112,12 @@ function getDatabaseConfig(): TypeOrmModuleOptions {
         UserProfile,
         AuthRateLimit,
         AuthSecurityEvent,
+        SubscriptionPlan,
+        SubscriptionEntitlementDefinition,
+        SubscriptionPlanEntitlement,
+        UserSubscription,
+        SubscriptionTransactionReference,
+        SubscriptionStateEvent,
       ],
       autoLoadEntities: false,
       synchronize: false,
@@ -126,6 +138,12 @@ function getDatabaseConfig(): TypeOrmModuleOptions {
       UserProfile,
       AuthRateLimit,
       AuthSecurityEvent,
+      SubscriptionPlan,
+      SubscriptionEntitlementDefinition,
+      SubscriptionPlanEntitlement,
+      UserSubscription,
+      SubscriptionTransactionReference,
+      SubscriptionStateEvent,
     ]),
     JwtModule.register({
       secret: getJwtSecret(),

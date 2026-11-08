@@ -1,6 +1,7 @@
 # SMARTROUTE AI
+
 > GitHub repository: **bolt-map** — smart Ai Map
-SMARTROUTE AI is a Malaysia-first smart mobility platform for navigation, flood intelligence, road safety, and fleet operations. This monorepo provides the working foundation for the admin dashboard, backend API, and mobile rider/driver web shells.
+> SMARTROUTE AI is a Malaysia-first smart mobility platform for navigation, flood intelligence, road safety, and fleet operations. This monorepo provides the working foundation for the admin dashboard, backend API, and mobile rider/driver web shells.
 
 ## Monorepo layout
 
@@ -50,6 +51,7 @@ SMARTROUTE AI is a Malaysia-first smart mobility platform for navigation, flood 
    psql -h localhost -p 5432 -U smartroute -d smartroute -W -v ON_ERROR_STOP=1 -f database\migrations\004_community_incidents.sql
    psql -h localhost -p 5432 -U smartroute -d smartroute -W -v ON_ERROR_STOP=1 -f database\migrations\005_community_incident_audit.sql
    psql -h localhost -p 5432 -U smartroute -d smartroute -W -v ON_ERROR_STOP=1 -f database\migrations\006_subscription_foundation.sql
+   psql -h localhost -p 5432 -U smartroute -d smartroute -W -v ON_ERROR_STOP=1 -f database\migrations\007_subscription_audit_actor_context.sql
    ```
 
    Use the configured database port (for example `5433`) if it differs from
@@ -72,7 +74,7 @@ $env:COMMUNITY_TEST_DB_PASSWORD = [Convert]::ToBase64String($bytes)
 Remove-Item Env:\COMMUNITY_TEST_DB_PASSWORD
 ```
 
-The harness verifies PostGIS, applies migrations 004, 005, and 006 twice, and
+The harness verifies PostGIS, applies migrations 004–007 twice, and
 runs PostgreSQL-backed community-report and subscription-foundation tests.
 Community create, vote, and delete audit events are written transactionally
 without coordinates or credentials. A database trigger rejects updates,
@@ -86,26 +88,58 @@ docker-compose.community-test.yml stop` stops the service without deleting
 the volume. Never set the integration-test URL to a development or production
 database.
 
+### Subscription PostgreSQL integration tests
+
+Run `.\scripts\test-subscriptions-postgres.ps1` to create a fresh,
+loopback-only PostgreSQL/PostGIS container with a temporary in-memory data
+directory, apply migrations 001–007 twice in order, and run the subscription
+PostgreSQL integration tests. The harness generates a test-only password in
+process memory and removes only the uniquely named container it created. It
+does not reuse or reset the persistent community-test volume, the security-test
+database, or any development database.
+
+The integration tests compare all six subscription entity column mappings
+and declared index definitions against PostgreSQL, including indexed column
+order/direction and uniqueness. They also check primary, foreign-key, and
+check constraints, exercise lifecycle/transaction-uniqueness violations, and
+call all three authenticated subscription GET endpoints against the database.
+Test sessions use the existing authentication guard; user-specific
+subscription and entitlement responses are checked for cross-user isolation.
+
 ### Subscription foundation (no purchases enabled)
 
-Migration 006 adds empty/configurable plan and entitlement tables, user
+Migrations 006 and 007 add empty/configurable plan and entitlement tables, user
 subscription records, minimal transaction-reference storage, and an
-append-only database audit of subscription state changes. No plans, prices,
-currencies, store product IDs, entitlement gates, or quotas are seeded. The
-authenticated backend reads `/api/v1/subscriptions/plans`,
-`/api/v1/subscriptions/me`, and `/api/v1/subscriptions/entitlements`; until
-configuration is approved, plan and entitlement results remain empty or
-explicitly unresolved. These endpoints do not gate navigation, routing,
-vehicle-profile, or critical safety operations.
+append-only database audit of subscription state changes. The NestJS backend
+maps these tables through TypeORM entities; migrations, not schema
+synchronization, remain authoritative. No plans, prices, currencies, store
+product IDs, entitlement gates, or quotas are seeded.
+
+The following read-only endpoints require an authenticated bearer access
+token and are also listed under **Subscriptions** in the Swagger UI at `/docs`:
+
+| Endpoint                                 | Response                                                                                                                                                               |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/subscriptions/plans`        | Array of active configured plans and their configured entitlements.                                                                                                    |
+| `GET /api/v1/subscriptions/me`           | `{ "subscription": null }` when none exists, otherwise the authenticated user’s latest subscription state and period.                                                  |
+| `GET /api/v1/subscriptions/entitlements` | Resolution (`no_active_subscription`, `resolved`, `ambiguous_active_subscriptions`, or `inactive_plan`), optional subscription, and effective configured entitlements. |
+
+Until configuration is approved, plan and entitlement results remain empty or
+explicitly unresolved. User-specific reads are scoped to the authenticated
+identity. No subscription write or transaction-reference API is exposed.
+These endpoints do not gate navigation, routing, vehicle profiles, or critical
+safety operations.
 
 No mobile purchase flow, billing SDK, store verification, webhook, or
 transaction-writing API is enabled. Transaction references do not contain raw
-receipts or purchase tokens. The audit trigger records state changes but does
-not yet attribute them to an authenticated actor; actor attribution and audit
-retention require policy decisions. Before enabling purchases, the product
-owner must approve the FREE/PRO/PRO+ feature and quota matrix, localized prices,
-currency, store product mapping, cancellation/grace/refund rules, store
-accounts and sandbox credentials. Apple/Google policy, consumer/tax, privacy,
+receipts or purchase tokens. Migration 007 permits a future writer to attach
+an optional transaction-local actor ID to audit events; no subscription writer
+currently sets it. That database setting is an application assertion, not
+independent identity proof. Audit retention and account-deletion behavior
+remain policy decisions. Before enabling purchases, the product owner must
+approve the FREE/PRO/PRO+ feature and quota matrix, localized prices, currency,
+store product mapping, cancellation/grace/refund rules, store accounts and
+sandbox credentials. Apple/Google policy, consumer/tax, privacy,
 data-retention, and app-store review requirements also remain to be assessed.
 
 Configure email delivery and the public app URL before using registration,

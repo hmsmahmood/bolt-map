@@ -1,5 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { DataSource } from 'typeorm';
+import { SubscriptionEntitlementDefinition } from '../entities/subscription-entitlement-definition.entity';
+import { SubscriptionPlanEntitlement } from '../entities/subscription-plan-entitlement.entity';
+import { SubscriptionPlan } from '../entities/subscription-plan.entity';
+import { SubscriptionStateEvent } from '../entities/subscription-state-event.entity';
+import { SubscriptionTransactionReference } from '../entities/subscription-transaction-reference.entity';
+import { User } from '../entities/user.entity';
+import { UserSubscription } from '../entities/user-subscription.entity';
 import { SubscriptionService } from './subscription.service';
 
 const databaseUrl = process.env.COMMUNITY_INCIDENT_TEST_DATABASE_URL;
@@ -14,7 +21,20 @@ postgresDescribe('Subscription foundation PostgreSQL integration', () => {
   const entitlementKey = `feature_${runKey}`;
 
   beforeAll(async () => {
-    dataSource = new DataSource({ type: 'postgres', url: databaseUrl });
+    dataSource = new DataSource({
+      type: 'postgres',
+      url: databaseUrl,
+      entities: [
+        User,
+        SubscriptionPlan,
+        SubscriptionEntitlementDefinition,
+        SubscriptionPlanEntitlement,
+        UserSubscription,
+        SubscriptionTransactionReference,
+        SubscriptionStateEvent,
+      ],
+      synchronize: false,
+    });
     await dataSource.initialize();
     service = new SubscriptionService(dataSource);
     await Promise.all(

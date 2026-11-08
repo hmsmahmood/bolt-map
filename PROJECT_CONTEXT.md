@@ -172,6 +172,7 @@ Limitations:
 Approved scope: provider-neutral data model and authenticated backend read APIs only.
 
 - Migration 006 adds configurable plans, entitlement definitions/mappings, user subscription records, unique transaction references, and trigger-generated append-only state events. No commercial values or entitlement rules are seeded.
+- TypeORM entities for all six subscription tables are registered with schema synchronization disabled; SQL migrations remain authoritative.
 - Authenticated reads expose plan catalog, current-user subscription, and resolved entitlements. Missing, inactive, or ambiguous state resolves explicitly; no FREE plan is inferred and no feature restriction is enforced.
 - Navigation, routing, vehicle profiles, community reporting, and critical safety handlers do not depend on subscription tables or APIs. No mobile billing SDK, store verification, purchase endpoint, webhook, or payment provider is integrated.
 - Test coverage includes migration idempotency, actual isolated PostgreSQL persistence, user isolation, entitlement resolution, uniqueness, state-event generation/immutability, and authenticated controller guards.
@@ -182,6 +183,8 @@ Outstanding owner decisions: plan catalog/display content; FREE/PRO/PRO+ feature
 Status: **PARTIAL — backend foundation only. Purchasable plans, enforcement, real payment/store integration, production database controls, and formal compliance are not implemented or approved.**
 
 Phase 8.1 verification: migration 007 adds optional transaction-local actor context for subscription state events; absent context remains NULL. The isolated test role is a superuser, so it does not verify least-privilege runtime grants. Production roles were unavailable and unchanged. Subscription/transaction deletion cascades and surviving append-only event identifiers are documented in `MALAYSIA_DATA_GOVERNANCE.md`; retention and account-deletion choices require owner approval.
+
+Phase 8 PostgreSQL verification rerun (2026-11-07): disposable PostgreSQL 16/PostGIS applied migrations 001–007 twice; 2 subscription PostgreSQL suites / 6 tests passed, including live entity/schema/index/foreign-key/constraint checks and authenticated endpoint ownership isolation. The temporary container was removed without altering existing community or security test databases. Production least-privilege roles remain unverified.
 
 ### Overall readiness
 
