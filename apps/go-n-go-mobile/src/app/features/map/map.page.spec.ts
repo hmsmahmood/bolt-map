@@ -5,8 +5,9 @@ import type { MapClickEvent } from "@capawesome/capacitor-maplibre";
 import { provideZonelessChangeDetection } from "@angular/core";
 import { ComponentFixture, TestBed } from "@angular/core/testing";
 import { provideRouter } from "@angular/router";
-import { of, throwError } from "rxjs";
+import { finalize, of, Subject, throwError } from "rxjs";
 import { ApiService } from "../../core/api/api.service";
+import { CommunityIncident } from "../../core/api/community-incident.model";
 import { NavigationRoute } from "../../core/api/navigation.model";
 import { VehicleProfile } from "../../core/api/vehicle-profile.model";
 import { TranslationService } from "../../core/i18n/translation.service";
@@ -38,6 +39,76 @@ describe("MapPage", () => {
       course: 90,
     },
   };
+  const routeAlertProfile: VehicleProfile = {
+    id: "route-alert-vehicle",
+    userId: "user-1",
+    name: "Daily car",
+    vehicleType: "car",
+    make: "Perodua",
+    model: "Myvi",
+    modelYear: 2024,
+    registrationNumber: null,
+    maxWeightKg: null,
+    maxHeightCm: null,
+    maxLengthCm: null,
+    createdAt: "2026-11-04T00:00:00.000Z",
+    updatedAt: "2026-11-04T00:00:00.000Z",
+  };
+  const routeAlertRoute: NavigationRoute = {
+    provider: "Valhalla",
+    vehicleType: "car",
+    distanceKm: 5.2,
+    durationSeconds: 390,
+    geometry: {
+      type: "LineString",
+      coordinates: [
+        [101.6869, 3.139],
+        [101.703, 3.148],
+        [101.72, 3.157],
+      ],
+    },
+    maneuvers: [],
+    liveTraffic: false,
+  };
+
+  function makeRouteAlertReport(
+    id: string,
+    lng: number,
+    lat: number,
+  ): CommunityIncident {
+    return {
+      id,
+      type: "accident",
+      lat,
+      lng,
+      createdAt: new Date(Date.now() - 8 * 60 * 1000).toISOString(),
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      confirmations: 1,
+      clears: 0,
+      confidence: "unconfirmed",
+      source: "community_report",
+      isMine: false,
+    };
+  }
+
+  async function startRouteNavigation(
+    route: NavigationRoute = routeAlertRoute,
+  ): Promise<void> {
+    api.getVehicleProfiles.and.returnValue(of([routeAlertProfile]));
+    api.calculateNavigationRoute.and.returnValue(of(route));
+    await fixture.componentInstance.startLocation();
+    fixture.componentInstance.openRoutePlanner();
+    await fixture.whenStable();
+    mapClickCallback({
+      mapId: "gng-driving-map",
+      coordinates: { latitude: 3.157, longitude: 101.72 },
+      point: { x: 10, y: 20 },
+    });
+    await fixture.componentInstance.calculateRoute();
+    fixture.componentInstance.startNavigation();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
 
   beforeEach(async () => {
     mapEngine = jasmine.createSpyObj<MapEngineService>("MapEngineService", [
@@ -120,6 +191,7 @@ describe("MapPage", () => {
       "voteOnCommunityIncident",
       "deleteCommunityIncident",
     ]);
+    api.getNearbyCommunityIncidents.and.returnValue(of([]));
     voiceGuidance = jasmine.createSpyObj<VoiceGuidanceService>(
       "VoiceGuidanceService",
       ["speak", "stop"],
@@ -566,6 +638,446 @@ describe("MapPage", () => {
       }),
     );
     expect(mapEngine.fitBounds).toHaveBeenCalled();
+  });
+
+  it("shows relevant community reports ahead during navigation and removes alerts when navigation stops", async () => {
+    const profile: VehicleProfile = {
+      id: "vehicle-1",
+      userId: "user-1",
+      name: "Daily car",
+      vehicleType: "car",
+      make: "Perodua",
+      model: "Myvi",
+      modelYear: 2024,
+      registrationNumber: null,
+      maxWeightKg: null,
+      maxHeightCm: null,
+      maxLengthCm: null,
+      createdAt: "2026-11-04T00:00:00.000Z",
+      updatedAt: "2026-11-04T00:00:00.000Z",
+    };
+    const route: NavigationRoute = {
+      provider: "Valhalla",
+      vehicleType: "car",
+      distanceKm: 5.2,
+      durationSeconds: 390,
+      geometry: {
+        type: "LineString",
+        coordinates: [
+          [101.6869, 3.139],
+          [101.703, 3.148],
+          [101.72, 3.157],
+        ],
+      },
+      maneuvers: [],
+      liveTraffic: false,
+    };
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const report = (id: string, lng: number, lat: number) => ({
+      id,
+      type: "accident" as const,
+      lat,
+      lng,
+      createdAt: new Date(Date.now() - 8 * 60 * 1000).toISOString(),
+      expiresAt,
+      confirmations: 1,
+      clears: 0,
+      confidence: "unconfirmed" as const,
+      source: "community_report" as const,
+      isMine: false,
+    });
+    api.getVehicleProfiles.and.returnValue(of([profile]));
+    api.calculateNavigationRoute.and.returnValue(of(route));
+    api.getNearbyCommunityIncidents.and.returnValue(
+      of([
+        report("ahead", 101.711, 3.1522),
+        report("behind", 101.695, 3.1435),
+        report("off-route", 101.711, 3.1552),
+      ]),
+    );
+
+    await fixture.componentInstance.startLocation();
+    fixture.componentInstance.openRoutePlanner();
+    mapClickCallback({
+      mapId: "gng-driving-map",
+      coordinates: { latitude: 3.157, longitude: 101.72 },
+      point: { x: 10, y: 20 },
+    });
+    await fixture.componentInstance.calculateRoute();
+    locationCallback(
+      {
+        ...position,
+        coords: { ...position.coords, latitude: 3.148, longitude: 101.703 },
+      },
+      undefined,
+    );
+    await fixture.whenStable();
+    fixture.componentInstance.startNavigation();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.getNearbyCommunityIncidents).toHaveBeenCalledWith(
+      3.148,
+      101.703,
+      5000,
+    );
+    expect(
+      fixture.componentInstance.routeCommunityAlerts().map(({ id }) => id),
+    ).toEqual(["ahead"]);
+    expect(fixture.nativeElement.textContent).toContain(
+      "mapRouteAlertCommunity",
+    );
+    expect(fixture.nativeElement.textContent).toContain("mapCommunityAccident");
+    expect(mapEngine.addMarker).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        marker: jasmine.objectContaining({ id: "gng-community-ahead" }),
+      }),
+    );
+
+    locationCallback(
+      {
+        ...position,
+        coords: { ...position.coords, latitude: 3.1544, longitude: 101.715 },
+      },
+      undefined,
+    );
+    await fixture.whenStable();
+    expect(fixture.componentInstance.routeCommunityAlerts()).toEqual([]);
+    expect(mapEngine.removeMarkerById).toHaveBeenCalledWith({
+      mapId: "gng-driving-map",
+      markerId: "gng-community-ahead",
+    });
+
+    await fixture.componentInstance.stopNavigation();
+    await fixture.whenStable();
+    expect(fixture.componentInstance.routeCommunityAlerts()).toEqual([]);
+  });
+
+  it("throttles route-alert requests to one per 45 seconds", async () => {
+    const now = Date.now();
+    const clock = spyOn(Date, "now").and.returnValue(now);
+    api.getNearbyCommunityIncidents.and.returnValue(of([]));
+
+    await startRouteNavigation();
+    expect(api.getNearbyCommunityIncidents).toHaveBeenCalledTimes(1);
+
+    clock.and.returnValue(now + 44_999);
+    locationCallback(
+      { ...position, timestamp: position.timestamp + 3_000 },
+      undefined,
+    );
+    await fixture.whenStable();
+    expect(api.getNearbyCommunityIncidents).toHaveBeenCalledTimes(1);
+
+    clock.and.returnValue(now + 45_000);
+    locationCallback(
+      { ...position, timestamp: position.timestamp + 6_000 },
+      undefined,
+    );
+    await fixture.whenStable();
+    expect(api.getNearbyCommunityIncidents).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not let reroute refreshes bypass the 45-second request limit", async () => {
+    const now = Date.now();
+    const clock = spyOn(Date, "now").and.returnValue(now);
+    api.getNearbyCommunityIncidents.and.returnValue(of([]));
+
+    await startRouteNavigation();
+    api.calculateNavigationRoute.and.returnValue(
+      of({ ...routeAlertRoute, distanceKm: 6 }),
+    );
+    await fixture.componentInstance.reroute();
+    expect(api.getNearbyCommunityIncidents).toHaveBeenCalledTimes(1);
+
+    clock.and.returnValue(now + 44_999);
+    locationCallback(
+      { ...position, timestamp: position.timestamp + 3_000 },
+      undefined,
+    );
+    await fixture.whenStable();
+    expect(api.getNearbyCommunityIncidents).toHaveBeenCalledTimes(1);
+
+    clock.and.returnValue(now + 45_000);
+    locationCallback(
+      { ...position, timestamp: position.timestamp + 6_000 },
+      undefined,
+    );
+    await fixture.whenStable();
+    expect(api.getNearbyCommunityIncidents).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not start a duplicate route-alert request while one is in flight", async () => {
+    const now = Date.now();
+    const clock = spyOn(Date, "now").and.returnValue(now);
+    const request = new Subject<CommunityIncident[]>();
+    api.getNearbyCommunityIncidents.and.returnValue(request);
+
+    await startRouteNavigation();
+    expect(api.getNearbyCommunityIncidents).toHaveBeenCalledTimes(1);
+
+    clock.and.returnValue(now + 45_001);
+    locationCallback(
+      { ...position, timestamp: position.timestamp + 3_000 },
+      undefined,
+    );
+    await fixture.whenStable();
+    expect(api.getNearbyCommunityIncidents).toHaveBeenCalledTimes(1);
+
+    request.next([]);
+    request.complete();
+    await fixture.whenStable();
+  });
+
+  it("keeps a still-fresh alert after a refresh failure and expires it afterward", async () => {
+    const now = Date.now();
+    const clock = spyOn(Date, "now").and.returnValue(now);
+    const firstRequest = new Subject<CommunityIncident[]>();
+    const alert = makeRouteAlertReport("fresh-after-failure", 101.703, 3.148);
+    spyOn(console, "warn");
+    api.getNearbyCommunityIncidents.and.returnValues(
+      firstRequest,
+      throwError(() => new Error("Nearby reports unavailable")),
+      of([]),
+    );
+
+    await startRouteNavigation();
+    clock.and.returnValue(now + 1_000);
+    firstRequest.next([alert]);
+    firstRequest.complete();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await fixture.whenStable();
+    expect(fixture.componentInstance.routeCommunityAlerts()).toEqual([
+      jasmine.objectContaining({ id: alert.id }),
+    ]);
+
+    clock.and.returnValue(now + 45_000);
+    locationCallback(
+      { ...position, timestamp: position.timestamp + 3_000 },
+      undefined,
+    );
+    await fixture.whenStable();
+    expect(api.getNearbyCommunityIncidents).toHaveBeenCalledTimes(2);
+    expect(
+      fixture.componentInstance.routeCommunityAlerts().map(({ id }) => id),
+    ).toEqual([alert.id]);
+
+    clock.and.returnValue(now + 46_000);
+    locationCallback(
+      { ...position, timestamp: position.timestamp + 6_000 },
+      undefined,
+    );
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(api.getNearbyCommunityIncidents).toHaveBeenCalledTimes(2);
+    expect(fixture.componentInstance.routeCommunityAlerts()).toEqual([]);
+    expect(
+      fixture.nativeElement.querySelector(".route-community-alert"),
+    ).toBeNull();
+  });
+
+  it("ignores an old route response and refreshes for a replacement route", async () => {
+    const now = Date.now();
+    const clock = spyOn(Date, "now").and.returnValue(now);
+    const firstRequest = new Subject<CommunityIncident[]>();
+    const routeB: NavigationRoute = {
+      ...routeAlertRoute,
+      geometry: {
+        type: "LineString",
+        coordinates: [
+          [101.6869, 3.139],
+          [101.7, 3.16],
+          [101.72, 3.157],
+        ],
+      },
+    };
+    const reportForRouteB = makeRouteAlertReport(
+      "replacement-route-report",
+      101.7,
+      3.16,
+    );
+    api.getNearbyCommunityIncidents.and.returnValues(
+      firstRequest,
+      of([reportForRouteB]),
+    );
+
+    await startRouteNavigation();
+    api.calculateNavigationRoute.and.returnValue(of(routeB));
+    await fixture.componentInstance.reroute();
+    expect(fixture.componentInstance.navigationRoute()).toEqual(routeB);
+    clock.and.returnValue(now + 45_000);
+    firstRequest.next([
+      makeRouteAlertReport("old-route-report", 101.703, 3.148),
+    ]);
+    firstRequest.complete();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await fixture.whenStable();
+
+    expect(api.getNearbyCommunityIncidents).toHaveBeenCalledTimes(2);
+    expect(
+      fixture.componentInstance.routeCommunityAlerts().map(({ id }) => id),
+    ).toEqual([reportForRouteB.id]);
+  });
+
+  it("times out a stalled request so a replacement route can refresh without accepting old results", async () => {
+    const now = Date.now();
+    let currentTime = now;
+    spyOn(Date, "now").and.callFake(() => currentTime);
+    const stalledRequest = new Subject<CommunityIncident[]>();
+    let requestCancelled = false;
+    const routeB: NavigationRoute = {
+      ...routeAlertRoute,
+      geometry: {
+        type: "LineString",
+        coordinates: [
+          [101.6869, 3.139],
+          [101.7, 3.16],
+          [101.72, 3.157],
+        ],
+      },
+    };
+    const reportForRouteB = makeRouteAlertReport(
+      "timed-out-route-report",
+      101.7,
+      3.16,
+    );
+    api.getNearbyCommunityIncidents.and.returnValue(of([]));
+
+    await startRouteNavigation();
+    expect(api.getNearbyCommunityIncidents).toHaveBeenCalledTimes(1);
+
+    api.getNearbyCommunityIncidents.and.returnValue(
+      stalledRequest.pipe(finalize(() => (requestCancelled = true))),
+    );
+    const clock = jasmine.clock();
+    clock.install();
+    try {
+      currentTime = now + 45_000;
+      locationCallback(
+        { ...position, timestamp: position.timestamp + 3_000 },
+        undefined,
+      );
+      expect(api.getNearbyCommunityIncidents).toHaveBeenCalledTimes(2);
+
+      api.calculateNavigationRoute.and.returnValue(of(routeB));
+      await fixture.componentInstance.reroute();
+      expect(fixture.componentInstance.navigationRoute()).toEqual(routeB);
+      expect(api.getNearbyCommunityIncidents).toHaveBeenCalledTimes(2);
+
+      clock.tick(15_000);
+      expect(requestCancelled).toBeTrue();
+      expect(api.getNearbyCommunityIncidents).toHaveBeenCalledTimes(2);
+
+      clock.uninstall();
+      currentTime = now + 60_000;
+      await fixture.whenStable();
+      api.getNearbyCommunityIncidents.and.returnValue(of([reportForRouteB]));
+      currentTime = now + 90_000;
+      locationCallback(
+        { ...position, timestamp: position.timestamp + 6_000 },
+        undefined,
+      );
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(api.getNearbyCommunityIncidents).toHaveBeenCalledTimes(3);
+      expect(
+        fixture.componentInstance.routeCommunityAlerts().map(({ id }) => id),
+      ).toEqual([reportForRouteB.id]);
+
+      stalledRequest.next([
+        makeRouteAlertReport("late-old-route-report", 101.703, 3.148),
+      ]);
+      stalledRequest.complete();
+      await fixture.whenStable();
+      expect(
+        fixture.componentInstance.routeCommunityAlerts().map(({ id }) => id),
+      ).toEqual([reportForRouteB.id]);
+    } finally {
+      clock.uninstall();
+      fixture.destroy();
+    }
+  });
+
+  it("hides fresh route alerts and their route markers after a GPS failure", async () => {
+    const alert = makeRouteAlertReport("gps-paused-report", 101.703, 3.148);
+    api.getNearbyCommunityIncidents.and.returnValue(of([alert]));
+
+    await startRouteNavigation();
+    expect(
+      fixture.nativeElement.querySelector(".route-community-alert"),
+    ).not.toBeNull();
+
+    locationCallback(null, new Error("GPS temporarily unavailable"));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.navigationPaused()).toBeTrue();
+    expect(fixture.componentInstance.routeCommunityAlerts()).toEqual([
+      jasmine.objectContaining({ id: alert.id }),
+    ]);
+    expect(
+      fixture.nativeElement.querySelector(".route-community-alert"),
+    ).toBeNull();
+    expect(mapEngine.removeMarkerById).toHaveBeenCalledWith({
+      mapId: "gng-driving-map",
+      markerId: "gng-community-gps-paused-report",
+    });
+  });
+
+  it("hides route alerts in the background and restores only fresh data on resume", async () => {
+    const alert = makeRouteAlertReport("background-report", 101.703, 3.148);
+    api.getNearbyCommunityIncidents.and.returnValue(of([alert]));
+
+    await startRouteNavigation();
+    expect(
+      fixture.nativeElement.querySelector(".route-community-alert"),
+    ).not.toBeNull();
+
+    appStateCallback({ isActive: false });
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.navigationPaused()).toBeTrue();
+    expect(
+      fixture.nativeElement.querySelector(".route-community-alert"),
+    ).toBeNull();
+    expect(fixture.componentInstance.routeCommunityAlerts()).toEqual([
+      jasmine.objectContaining({ id: alert.id }),
+    ]);
+
+    appStateCallback({ isActive: true });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.navigationPaused()).toBeFalse();
+    expect(
+      fixture.nativeElement.querySelector(".route-community-alert"),
+    ).not.toBeNull();
+    expect(api.getNearbyCommunityIncidents).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears route alerts when the driver arrives", async () => {
+    api.getNearbyCommunityIncidents.and.returnValue(
+      of([makeRouteAlertReport("arrival-report", 101.703, 3.148)]),
+    );
+    await startRouteNavigation();
+    expect(fixture.componentInstance.routeCommunityAlerts().length).toBe(1);
+
+    locationCallback(
+      {
+        ...position,
+        coords: { ...position.coords, latitude: 3.157, longitude: 101.72 },
+      },
+      undefined,
+    );
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.navigationArrived()).toBeTrue();
+    expect(fixture.componentInstance.routeCommunityAlerts()).toEqual([]);
+    expect(
+      fixture.nativeElement.querySelector(".route-community-alert"),
+    ).toBeNull();
   });
 
   it("shows a route error when the routing API is unavailable", async () => {

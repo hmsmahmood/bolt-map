@@ -18,7 +18,7 @@ import {
   IonSelectOption,
 } from "@ionic/angular/standalone";
 import { RouterLink } from "@angular/router";
-import { firstValueFrom } from "rxjs";
+import { firstValueFrom, timeout } from "rxjs";
 import { environment } from "../../../environments/environment";
 import { ApiService } from "../../core/api/api.service";
 import {
@@ -27,6 +27,13 @@ import {
   CommunityIncidentType,
   CommunityIncidentVote,
 } from "../../core/api/community-incident.model";
+import {
+  closestRouteProgress,
+  distanceBetweenCoordinates,
+  ROUTE_ALERT_MAX_DISTANCE_METERS,
+  RouteCommunityAlert,
+  selectRouteCommunityAlerts,
+} from "./route-community-alerts";
 import type {
   NavigationManeuver,
   NavigationCoordinate,
@@ -57,6 +64,10 @@ const COMMUNITY_MARKER_PREFIX = "gng-community-";
 const OFF_ROUTE_THRESHOLD_METERS = 100;
 const OFF_ROUTE_FIXES_BEFORE_REROUTE = 2;
 const AUTO_REROUTE_COOLDOWN_MS = 30_000;
+const ROUTE_ALERT_REFRESH_INTERVAL_MS = 45_000;
+const ROUTE_ALERT_REQUEST_TIMEOUT_MS = 15_000;
+const ROUTE_ALERT_FRESHNESS_MS = ROUTE_ALERT_REFRESH_INTERVAL_MS;
+const ROUTE_ALERT_SEARCH_RADIUS_METERS = ROUTE_ALERT_MAX_DISTANCE_METERS;
 const LOCATION_MARKER_ICON =
   "data:image/svg+xml;charset=utf-8," +
   encodeURIComponent(
@@ -108,6 +119,7 @@ export class MapPage implements AfterViewInit, OnDestroy {
   readonly selectedVehicleProfileId = signal("");
   readonly routeDestination = signal<NavigationCoordinate | null>(null);
   readonly navigationRoute = signal<NavigationRoute | null>(null);
+  readonly routeCommunityAlerts = signal<RouteCommunityAlert[]>([]);
   readonly communityReports = signal<CommunityIncident[]>([]);
   readonly communityReportsOpen = signal(false);
   readonly communityReportsLoading = signal(false);
@@ -234,6 +246,11 @@ export class MapPage implements AfterViewInit, OnDestroy {
   private lastAnnouncedManeuverKey: string | null = null;
   private offRouteFixCount = 0;
   private lastAutomaticRerouteAt = 0;
+  private lastRouteAlertRequestAt = 0;
+  private lastRouteAlertSuccessAt: number | null = null;
+  private routeAlertExpiryTimer: ReturnType<typeof setTimeout> | null = null;
+  private routeAlertRequestInFlight = false;
+  private routeAlertRefreshPending = false;
   private resumeLocationOnForeground = false;
   private appIsActive = true;
 
@@ -246,6 +263,7 @@ export class MapPage implements AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.destroyed = true;
+    this.clearRouteCommunityAlerts();
     document.body.classList.remove("map-route-active");
     this.lastPosition = null;
     this.pendingLocationRender = null;
@@ -354,6 +372,7 @@ export class MapPage implements AfterViewInit, OnDestroy {
           this.locationError.set("mapLocationDenied");
           if (this.navigationActive()) {
             this.navigationPaused.set(true);
+            void this.renderCommunityMarkers();
           }
           return;
         }
@@ -732,6 +751,7 @@ export class MapPage implements AfterViewInit, OnDestroy {
     this.currentSpeedKph.set(null);
     this.routeCumulativeMeters = [];
     this.navigationRoute.set(null);
+    this.clearRouteCommunityAlerts();
     this.routeDestination.set(null);
     this.routeError.set(null);
     try {
@@ -746,6 +766,7 @@ export class MapPage implements AfterViewInit, OnDestroy {
     } catch {
       this.routeError.set("mapRouteRenderFailed");
     }
+    void this.renderCommunityMarkers();
   }
 
   startNavigation(): void {
@@ -798,6 +819,7 @@ export class MapPage implements AfterViewInit, OnDestroy {
         this.navigationOffRoute.set(false);
         this.followingLocation.set(true);
         this.lastAnnouncedManeuverKey = null;
+        void this.refreshRouteCommunityAlerts();
         this.updateVoiceGuidance();
       }
     } catch {
@@ -837,7 +859,14 @@ export class MapPage implements AfterViewInit, OnDestroy {
         ? position.coords.speed * 3.6
         : null,
     );
+    const previousRouteProgress = this.routeProgressMeters();
     this.updateNavigationProgress(position);
+    this.updateRouteAlertProgress(
+      previousRouteProgress,
+      this.routeProgressMeters(),
+    );
+    this.removeExpiredRouteAlerts();
+    void this.refreshRouteCommunityAlerts();
     this.updateVoiceGuidance();
     this.pendingLocationRender = { position, bearing };
     void this.flushLocationRender();
@@ -910,8 +939,13 @@ export class MapPage implements AfterViewInit, OnDestroy {
         ) {
           this.locationState.set("active");
           this.locationError.set(null);
+          const wasNavigationPaused = this.navigationPaused();
           this.navigationPaused.set(false);
           this.updateVoiceGuidance();
+          if (wasNavigationPaused) {
+            void this.renderCommunityMarkers();
+            void this.refreshRouteCommunityAlerts();
+          }
         }
       }
     } catch {
@@ -926,6 +960,7 @@ export class MapPage implements AfterViewInit, OnDestroy {
   }
 
   private async setActiveRoute(route: NavigationRoute): Promise<void> {
+    this.clearRouteCommunityAlerts();
     this.navigationRoute.set(route);
     this.routeProgressMeters.set(0);
     this.routeProgressSegmentIndex.set(0);
@@ -943,10 +978,221 @@ export class MapPage implements AfterViewInit, OnDestroy {
       );
     }
     this.followingLocation.set(false);
+    void this.renderCommunityMarkers();
     if (this.navigationActive() && this.lastPosition) {
       this.updateNavigationProgress(this.lastPosition);
+      void this.refreshRouteCommunityAlerts();
     }
     await this.renderRoute(route);
+  }
+
+  formatReportAge(createdAt: string): string {
+    const elapsedMinutes = Math.max(
+      0,
+      Math.floor((Date.now() - Date.parse(createdAt)) / 60_000),
+    );
+    const locale = this.i18n.locale();
+    const formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+    if (elapsedMinutes < 1) {
+      return formatter.format(0, "second");
+    }
+    if (elapsedMinutes < 60) {
+      return formatter.format(-elapsedMinutes, "minute");
+    }
+    return formatter.format(-Math.floor(elapsedMinutes / 60), "hour");
+  }
+
+  private async refreshRouteCommunityAlerts(): Promise<void> {
+    const route = this.navigationRoute();
+    const position = this.lastPosition;
+    if (
+      !this.navigationActive() ||
+      this.navigationPaused() ||
+      this.navigationArrived() ||
+      this.navigationOffRoute() ||
+      !route ||
+      !position ||
+      !this.appIsActive
+    ) {
+      return;
+    }
+    const now = Date.now();
+    if (
+      this.routeAlertRequestInFlight ||
+      now - this.lastRouteAlertRequestAt < ROUTE_ALERT_REFRESH_INTERVAL_MS
+    ) {
+      return;
+    }
+
+    this.routeAlertRequestInFlight = true;
+    this.lastRouteAlertRequestAt = now;
+    try {
+      const reports = await firstValueFrom(
+        this.api.getNearbyCommunityIncidents(
+          position.coords.latitude,
+          position.coords.longitude,
+          ROUTE_ALERT_SEARCH_RADIUS_METERS,
+        ).pipe(timeout({ first: ROUTE_ALERT_REQUEST_TIMEOUT_MS })),
+      );
+      const routeChanged = this.navigationRoute() !== route;
+      if (
+        this.destroyed ||
+        !this.navigationActive() ||
+        this.navigationPaused() ||
+        this.navigationArrived() ||
+        this.navigationOffRoute() ||
+        !this.appIsActive ||
+        routeChanged
+      ) {
+        if (
+          !this.destroyed &&
+          !routeChanged &&
+          this.navigationActive() &&
+          !this.navigationArrived() &&
+          !this.navigationOffRoute() &&
+          (this.navigationPaused() || !this.appIsActive)
+        ) {
+          this.routeAlertRefreshPending = true;
+        }
+        return;
+      }
+
+      const alerts = selectRouteCommunityAlerts(
+        reports,
+        route.geometry.coordinates,
+        this.routeCumulativeMeters,
+        this.routeProgressMeters(),
+        this.routeProgressSegmentIndex(),
+      );
+      this.routeCommunityAlerts.set(alerts);
+      this.lastRouteAlertSuccessAt = Date.now();
+      this.routeAlertRefreshPending = false;
+      this.scheduleRouteAlertExpiry();
+      await this.renderCommunityMarkers();
+    } catch {
+      if (!this.destroyed && this.navigationRoute() === route) {
+        this.removeExpiredRouteAlerts();
+        if (this.navigationPaused() || !this.appIsActive) {
+          this.routeAlertRefreshPending = true;
+        }
+        console.warn("Could not refresh community route alerts.");
+      }
+    } finally {
+      this.routeAlertRequestInFlight = false;
+      const routeChanged = this.navigationRoute() !== route;
+      const refreshAfterResume =
+        this.routeAlertRefreshPending &&
+        this.appIsActive &&
+        !this.navigationPaused();
+      if (
+        this.navigationActive() &&
+        !this.navigationArrived() &&
+        !this.navigationOffRoute() &&
+        (routeChanged || refreshAfterResume)
+      ) {
+        this.routeAlertRefreshPending = false;
+        void this.refreshRouteCommunityAlerts();
+      }
+    }
+  }
+
+  private removeExpiredRouteAlerts(): void {
+    const now = Date.now();
+    if (
+      this.lastRouteAlertSuccessAt !== null &&
+      now - this.lastRouteAlertSuccessAt >= ROUTE_ALERT_FRESHNESS_MS
+    ) {
+      this.clearRouteCommunityAlerts();
+      void this.renderCommunityMarkers();
+      return;
+    }
+
+    const currentAlerts = this.routeCommunityAlerts();
+    const currentAlertsCount = currentAlerts.length;
+    const activeAlerts = currentAlerts.filter(
+      (alert) => Date.parse(alert.expiresAt) > now,
+    );
+    if (activeAlerts.length !== currentAlertsCount) {
+      this.routeCommunityAlerts.set(activeAlerts);
+      void this.renderCommunityMarkers();
+    }
+  }
+
+  private scheduleRouteAlertExpiry(): void {
+    this.clearRouteAlertExpiryTimer();
+    const refreshedAt = this.lastRouteAlertSuccessAt;
+    const alerts = this.routeCommunityAlerts();
+    if (refreshedAt === null || alerts.length === 0) {
+      return;
+    }
+
+    const reportExpiry = Math.min(
+      ...alerts.map((alert) => Date.parse(alert.expiresAt)),
+    );
+    const expiry = Math.min(
+      refreshedAt + ROUTE_ALERT_FRESHNESS_MS,
+      reportExpiry,
+    );
+    this.routeAlertExpiryTimer = setTimeout(() => {
+      this.routeAlertExpiryTimer = null;
+      this.removeExpiredRouteAlerts();
+      this.scheduleRouteAlertExpiry();
+    }, Math.max(0, expiry - Date.now()));
+  }
+
+  private clearRouteCommunityAlerts(): void {
+    this.routeCommunityAlerts.set([]);
+    this.lastRouteAlertSuccessAt = null;
+    this.routeAlertRefreshPending = false;
+    this.clearRouteAlertExpiryTimer();
+  }
+
+  private clearRouteAlertExpiryTimer(): void {
+    if (this.routeAlertExpiryTimer !== null) {
+      clearTimeout(this.routeAlertExpiryTimer);
+      this.routeAlertExpiryTimer = null;
+    }
+  }
+
+  private updateRouteAlertProgress(
+    previousProgressMeters: number,
+    currentProgressMeters: number,
+  ): void {
+    const alerts = this.routeCommunityAlerts();
+    if (alerts.length === 0) {
+      return;
+    }
+
+    if (this.navigationOffRoute() || this.navigationArrived()) {
+      this.clearRouteCommunityAlerts();
+      void this.renderCommunityMarkers();
+      return;
+    }
+
+    const progressDelta = Math.max(
+      0,
+      currentProgressMeters - previousProgressMeters,
+    );
+    if (progressDelta === 0) {
+      return;
+    }
+
+    const remainingAlerts = alerts
+      .map((alert) => ({
+        ...alert,
+        distanceAheadMeters: alert.distanceAheadMeters - progressDelta,
+      }))
+      .filter(
+        (alert) =>
+          alert.distanceAheadMeters > 20 &&
+          alert.distanceAheadMeters <= ROUTE_ALERT_MAX_DISTANCE_METERS,
+      );
+    if (remainingAlerts.length !== alerts.length) {
+      this.routeCommunityAlerts.set(remainingAlerts);
+      void this.renderCommunityMarkers();
+    } else {
+      this.routeCommunityAlerts.set(remainingAlerts);
+    }
   }
 
   formatDistance(meters: number): string {
@@ -983,6 +1229,8 @@ export class MapPage implements AfterViewInit, OnDestroy {
       const newlyArrived = !this.navigationArrived();
       this.navigationArrived.set(true);
       this.navigationOffRoute.set(false);
+      this.clearRouteCommunityAlerts();
+      void this.renderCommunityMarkers();
       this.routeProgressMeters.set(
         this.routeCumulativeMeters[this.routeCumulativeMeters.length - 1] ?? 0,
       );
@@ -1179,6 +1427,7 @@ export class MapPage implements AfterViewInit, OnDestroy {
         hadLocationWatch || needsNavigationResume;
       if (needsNavigationResume) {
         this.navigationPaused.set(true);
+        void this.renderCommunityMarkers();
       }
       if (hadLocationWatch) {
         void this.clearLocationWatch();
@@ -1191,6 +1440,7 @@ export class MapPage implements AfterViewInit, OnDestroy {
 
     if (this.resumeLocationOnForeground) {
       this.resumeLocationOnForeground = false;
+      this.removeExpiredRouteAlerts();
       this.locationState.set("idle");
       void this.startLocation();
     }
@@ -1201,6 +1451,7 @@ export class MapPage implements AfterViewInit, OnDestroy {
     this.locationError.set("mapLocationFailed");
     if (this.navigationActive()) {
       this.navigationPaused.set(true);
+      void this.renderCommunityMarkers();
       if (this.voiceGuidanceEnabled()) {
         void this.stopVoiceGuidance();
       }
@@ -1499,7 +1750,15 @@ export class MapPage implements AfterViewInit, OnDestroy {
     }
     this.communityMarkerIds.clear();
 
-    for (const report of this.communityReports()) {
+    const reportsById = new Map(
+      this.communityReports().map((report) => [report.id, report]),
+    );
+    if (this.navigationActive() && !this.navigationPaused() && this.appIsActive) {
+      for (const alert of this.routeCommunityAlerts()) {
+        reportsById.set(alert.id, alert);
+      }
+    }
+    for (const report of reportsById.values()) {
       const markerId = `${COMMUNITY_MARKER_PREFIX}${report.id}`;
       const color = COMMUNITY_MARKER_COLORS[report.type];
       const iconUrl =
@@ -1537,86 +1796,6 @@ function isCommunityIncidentType(
     typeof value === "string" &&
     (COMMUNITY_INCIDENT_TYPES as readonly string[]).includes(value)
   );
-}
-
-function closestRouteProgress(
-  point: [number, number],
-  coordinates: Array<[number, number]>,
-  cumulativeMeters: number[],
-  minimumSegment: number,
-): {
-  segmentIndex: number;
-  progressMeters: number;
-  distanceMeters: number;
-} | null {
-  let closest: {
-    segmentIndex: number;
-    progressMeters: number;
-    distanceMeters: number;
-  } | null = null;
-  const latitudeRadians = (point[1] * Math.PI) / 180;
-  const longitudeScale = Math.cos(latitudeRadians);
-  const pointX = point[0] * longitudeScale;
-  const pointY = point[1];
-
-  for (
-    let segmentIndex = Math.max(0, minimumSegment);
-    segmentIndex < coordinates.length - 1;
-    segmentIndex += 1
-  ) {
-    const start = coordinates[segmentIndex];
-    const end = coordinates[segmentIndex + 1];
-    const startX = start[0] * longitudeScale;
-    const endX = end[0] * longitudeScale;
-    const segmentX = endX - startX;
-    const segmentY = end[1] - start[1];
-    const segmentLengthSquared = segmentX ** 2 + segmentY ** 2;
-    const fraction =
-      segmentLengthSquared === 0
-        ? 0
-        : Math.max(
-            0,
-            Math.min(
-              1,
-              ((pointX - startX) * segmentX + (pointY - start[1]) * segmentY) /
-                segmentLengthSquared,
-            ),
-          );
-    const projected: [number, number] = [
-      start[0] + (end[0] - start[0]) * fraction,
-      start[1] + (end[1] - start[1]) * fraction,
-    ];
-    const distanceMeters = distanceBetweenCoordinates(point, projected);
-    if (!closest || distanceMeters < closest.distanceMeters) {
-      closest = {
-        segmentIndex,
-        progressMeters:
-          cumulativeMeters[segmentIndex] +
-          (cumulativeMeters[segmentIndex + 1] -
-            cumulativeMeters[segmentIndex]) *
-            fraction,
-        distanceMeters,
-      };
-    }
-  }
-  return closest;
-}
-
-function distanceBetweenCoordinates(
-  first: [number, number],
-  second: [number, number],
-): number {
-  const earthRadiusMeters = 6_371_000;
-  const latitudeDifference = ((second[1] - first[1]) * Math.PI) / 180;
-  const longitudeDifference = ((second[0] - first[0]) * Math.PI) / 180;
-  const firstLatitude = (first[1] * Math.PI) / 180;
-  const secondLatitude = (second[1] * Math.PI) / 180;
-  const haversine =
-    Math.sin(latitudeDifference / 2) ** 2 +
-    Math.cos(firstLatitude) *
-      Math.cos(secondLatitude) *
-      Math.sin(longitudeDifference / 2) ** 2;
-  return 2 * earthRadiusMeters * Math.asin(Math.sqrt(haversine));
 }
 
 function bearingBetweenCoordinates(
