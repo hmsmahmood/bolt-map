@@ -60,6 +60,28 @@
       }
     </section>
     } @if (mapState() === 'ready') {
+    @if (navigationActive() && !navigationPaused() && !navigationArrived() &&
+    routeCommunityAlerts()[0]; as alert) {
+    <section class="route-community-alert" role="status" aria-live="polite">
+      <span>{{ i18n.text('mapRouteAlertCommunity') }}</span>
+      <strong>
+        {{ i18n.text(communityIncidentTypeKey(alert.type)) }}
+        {{ i18n.text('mapRouteAlertAhead') }}
+      </strong>
+      <span>
+        {{ i18n.text('mapRouteAlertDistanceAhead') }}
+        {{ formatDistance(alert.distanceAheadMeters) }}
+      </span>
+      <span>
+        {{ i18n.text('mapRouteAlertReported') }}
+        {{ formatReportAge(alert.createdAt) }}
+      </span>
+      <span>
+        {{ i18n.text('mapRouteAlertConfidence') }}:
+        {{ i18n.text(communityConfidenceKey(alert)) }}
+      </span>
+    </section>
+    }
     <nav class="map-controls" [attr.aria-label]="i18n.text('mapTitle')">
       <ion-button
         fill="solid"
