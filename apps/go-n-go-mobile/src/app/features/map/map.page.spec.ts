@@ -15,6 +15,14 @@ import { MapEngineService } from "./map-engine.service";
 import { MapPage } from "./map.page";
 import { VoiceGuidanceService } from "./voice-guidance.service";
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 describe("MapPage", () => {
   let fixture: ComponentFixture<MapPage>;
   let mapEngine: jasmine.SpyObj<MapEngineService>;
@@ -395,6 +403,140 @@ describe("MapPage", () => {
     );
   });
 
+  it("does not apply community reports returned for a location that is no longer current", async () => {
+    const existingReport: CommunityIncident = {
+      id: "current-location-report",
+      type: "road_hazard",
+      lat: 3.14,
+      lng: 101.687,
+      createdAt: "2026-11-04T10:00:00.000Z",
+      expiresAt: "2026-11-04T12:00:00.000Z",
+      confirmations: 1,
+      clears: 0,
+      confidence: "unconfirmed",
+      source: "community_report",
+      isMine: false,
+    };
+    const staleResponse = new Subject<CommunityIncident[]>();
+    api.getNearbyCommunityIncidents.and.returnValue(staleResponse);
+    fixture.componentInstance.communityReports.set([existingReport]);
+    await fixture.componentInstance.startLocation();
+
+    const request = fixture.componentInstance.loadCommunityReports();
+    locationCallback(
+      {
+        ...position,
+        timestamp: Date.now(),
+        coords: { ...position.coords, latitude: 3.16, longitude: 101.71 },
+      },
+      undefined,
+    );
+    await fixture.whenStable();
+    staleResponse.next([
+      { ...existingReport, id: "outdated-location-report" },
+    ]);
+    staleResponse.complete();
+    await request;
+
+    expect(fixture.componentInstance.communityReports()).toEqual([
+      existingReport,
+    ]);
+    expect(fixture.componentInstance.communityReportMessage()).toBeNull();
+    expect(fixture.componentInstance.communityReportsLoading()).toBeFalse();
+  });
+
+  it("serializes community marker updates so a deleted report is not re-added", async () => {
+    await fixture.componentInstance.startLocation();
+    const report: CommunityIncident = {
+      id: "concurrent-delete",
+      type: "road_hazard",
+      lat: 3.14,
+      lng: 101.687,
+      createdAt: "2026-11-04T10:00:00.000Z",
+      expiresAt: "2026-11-04T12:00:00.000Z",
+      confirmations: 1,
+      clears: 0,
+      confidence: "unconfirmed",
+      source: "community_report",
+      isMine: true,
+    };
+    const markerId = "gng-community-concurrent-delete";
+    const markerIds = new Set<string>();
+    const markerAdd = deferred<void>();
+    mapEngine.addMarker.and.callFake(async ({ marker }) => {
+      if (marker.id === markerId) {
+        await markerAdd.promise;
+      }
+      markerIds.add(marker.id);
+    });
+    mapEngine.removeMarkerById.and.callFake(async ({ markerId: id }) => {
+      markerIds.delete(id);
+    });
+    api.getNearbyCommunityIncidents.and.returnValue(of([report]));
+    api.deleteCommunityIncident.and.returnValue(of(undefined));
+
+    const load = fixture.componentInstance.loadCommunityReports();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mapEngine.addMarker).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        marker: jasmine.objectContaining({ id: markerId }),
+      }),
+    );
+
+    const deletion =
+      fixture.componentInstance.deleteCommunityReport(report);
+    markerAdd.resolve();
+    await Promise.all([load, deletion]);
+
+    expect(fixture.componentInstance.communityReports()).toEqual([]);
+    expect(markerIds.has(markerId)).toBeFalse();
+    expect(mapEngine.removeMarkerById).toHaveBeenCalledWith({
+      mapId: "gng-driving-map",
+      markerId,
+    });
+  });
+
+  it("waits for marker rendering before replacing the map style and restores markers", async () => {
+    await fixture.componentInstance.startLocation();
+    const report: CommunityIncident = {
+      id: "style-replacement",
+      type: "accident",
+      lat: 3.14,
+      lng: 101.687,
+      createdAt: "2026-11-04T10:00:00.000Z",
+      expiresAt: "2026-11-04T12:00:00.000Z",
+      confirmations: 1,
+      clears: 0,
+      confidence: "unconfirmed",
+      source: "community_report",
+      isMine: false,
+    };
+    const markerId = "gng-community-style-replacement";
+    const markerAdd = deferred<void>();
+    let markerAddCount = 0;
+    mapEngine.addMarker.and.callFake(async ({ marker }) => {
+      if (marker.id === markerId) {
+        markerAddCount += 1;
+        if (markerAddCount === 1) {
+          await markerAdd.promise;
+        }
+      }
+    });
+    api.getNearbyCommunityIncidents.and.returnValue(of([report]));
+
+    const load = fixture.componentInstance.loadCommunityReports();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fixture.componentInstance.toggleNightMode();
+    expect(mapEngine.setStyle).not.toHaveBeenCalled();
+
+    markerAdd.resolve();
+    await load;
+    await fixture.whenStable();
+
+    expect(mapEngine.setStyle).toHaveBeenCalledTimes(1);
+    expect(markerAddCount).toBe(2);
+  });
+
   it("submits a report only from the user's explicit action and refreshes nearby reports", async () => {
     const report = {
       id: "report-2",
@@ -493,6 +635,7 @@ describe("MapPage", () => {
   it("pauses foreground navigation on backgrounding and recovers after GPS resumes", async () => {
     await fixture.componentInstance.startLocation();
     fixture.componentInstance.navigationActive.set(true);
+    fixture.componentInstance.voiceGuidanceEnabled.set(true);
 
     appStateCallback({ isActive: false });
 
@@ -511,9 +654,11 @@ describe("MapPage", () => {
     expect(mapEngine.watchPosition).toHaveBeenCalledTimes(2);
     expect(fixture.componentInstance.navigationPaused()).toBeFalse();
 
+    voiceGuidance.stop.calls.reset();
     locationCallback(null, new Error("GPS temporarily unavailable"));
     expect(fixture.componentInstance.navigationPaused()).toBeTrue();
     expect(fixture.componentInstance.locationState()).toBe("error");
+    expect(voiceGuidance.stop).toHaveBeenCalled();
     await fixture.whenStable();
     expect(
       fixture.nativeElement.querySelector(".location-error")?.textContent,
@@ -536,19 +681,24 @@ describe("MapPage", () => {
       location: "denied",
       coarseLocation: "denied",
     });
+    fixture.componentInstance.navigationActive.set(true);
+    fixture.componentInstance.voiceGuidanceEnabled.set(true);
 
     await fixture.componentInstance.startLocation();
 
     expect(fixture.componentInstance.locationState()).toBe("denied");
     expect(fixture.componentInstance.locationError()).toBe("mapLocationDenied");
+    expect(fixture.componentInstance.navigationPaused()).toBeTrue();
+    expect(voiceGuidance.stop).toHaveBeenCalled();
     expect(mapEngine.getCurrentPosition).not.toHaveBeenCalled();
   });
 
-  it("switches map themes without waiting for the web renderer style-load event", () => {
+  it("switches map themes without waiting for the web renderer style-load event", async () => {
     fixture.componentInstance.toggleNightMode();
 
-    expect(mapEngine.setStyle).toHaveBeenCalled();
     expect(fixture.componentInstance.nightMode()).toBeTrue();
+    await fixture.whenStable();
+    expect(mapEngine.setStyle).toHaveBeenCalled();
   });
 
   it("sends location only after explicit route calculation and draws the returned route", async () => {
@@ -638,6 +788,147 @@ describe("MapPage", () => {
       }),
     );
     expect(mapEngine.fitBounds).toHaveBeenCalled();
+  });
+
+  it("ignores an older route response after the vehicle profile changes", async () => {
+    const secondProfile: VehicleProfile = {
+      ...routeAlertProfile,
+      id: "route-alert-truck",
+      vehicleType: "truck",
+    };
+    const truckRoute: NavigationRoute = {
+      ...routeAlertRoute,
+      vehicleType: "truck",
+    };
+    const oldResponse = new Subject<NavigationRoute>();
+    api.getVehicleProfiles.and.returnValue(
+      of([routeAlertProfile, secondProfile]),
+    );
+    api.calculateNavigationRoute.and.returnValues(
+      oldResponse,
+      of(truckRoute),
+    );
+
+    await fixture.componentInstance.startLocation();
+    fixture.componentInstance.openRoutePlanner();
+    await fixture.whenStable();
+    mapClickCallback({
+      mapId: "gng-driving-map",
+      coordinates: { latitude: 3.157, longitude: 101.72 },
+      point: { x: 10, y: 20 },
+    });
+    const oldRequest =
+      fixture.componentInstance.calculateRoute();
+    expect(api.calculateNavigationRoute).toHaveBeenCalledTimes(1);
+
+    fixture.componentInstance.selectVehicleProfile(secondProfile.id);
+    const newRequest =
+      fixture.componentInstance.calculateRoute();
+    await newRequest;
+    expect(fixture.componentInstance.navigationRoute()).toEqual(truckRoute);
+
+    oldResponse.next(routeAlertRoute);
+    oldResponse.complete();
+    await oldRequest;
+
+    expect(fixture.componentInstance.selectedVehicleProfileId()).toBe(
+      secondProfile.id,
+    );
+    expect(fixture.componentInstance.navigationRoute()).toEqual(truckRoute);
+    expect(fixture.componentInstance.routeLoading()).toBeFalse();
+    expect(api.calculateNavigationRoute.calls.mostRecent().args[0])
+      .toEqual(
+        jasmine.objectContaining({ vehicleProfileId: secondProfile.id }),
+      );
+  });
+
+  it("invalidates a pending route calculation when the destination changes", async () => {
+    const oldResponse = new Subject<NavigationRoute>();
+    const replacementDestination = { lat: 3.16, lng: 101.71 };
+    const replacementRoute: NavigationRoute = {
+      ...routeAlertRoute,
+      geometry: {
+        type: "LineString",
+        coordinates: [
+          [101.6869, 3.139],
+          [101.705, 3.15],
+          [replacementDestination.lng, replacementDestination.lat],
+        ],
+      },
+    };
+    api.getVehicleProfiles.and.returnValue(of([routeAlertProfile]));
+    api.calculateNavigationRoute.and.returnValues(
+      oldResponse,
+      of(replacementRoute),
+    );
+
+    await fixture.componentInstance.startLocation();
+    fixture.componentInstance.openRoutePlanner();
+    await fixture.whenStable();
+    mapClickCallback({
+      mapId: "gng-driving-map",
+      coordinates: { latitude: 3.157, longitude: 101.72 },
+      point: { x: 10, y: 20 },
+    });
+    const oldRequest =
+      fixture.componentInstance.calculateRoute();
+
+    mapClickCallback({
+      mapId: "gng-driving-map",
+      coordinates: {
+        latitude: replacementDestination.lat,
+        longitude: replacementDestination.lng,
+      },
+      point: { x: 20, y: 30 },
+    });
+    expect(fixture.componentInstance.navigationRoute()).toBeNull();
+    expect(fixture.componentInstance.routeProgressMeters()).toBe(0);
+    expect(fixture.componentInstance.routeCommunityAlerts()).toEqual([]);
+
+    const replacementRequest =
+      fixture.componentInstance.calculateRoute();
+    await replacementRequest;
+    oldResponse.next(routeAlertRoute);
+    oldResponse.complete();
+    await oldRequest;
+
+    expect(fixture.componentInstance.routeDestination()).toEqual(
+      replacementDestination,
+    );
+    expect(fixture.componentInstance.navigationRoute()).toEqual(
+      replacementRoute,
+    );
+  });
+
+  it("rejects malformed route geometry without drawing or activating it", async () => {
+    api.getVehicleProfiles.and.returnValue(of([routeAlertProfile]));
+    api.calculateNavigationRoute.and.returnValue(
+      of({
+        ...routeAlertRoute,
+        geometry: {
+          type: "LineString",
+          coordinates: [
+            [181, 3.139],
+            [101.72, 3.157],
+          ],
+        },
+      } as NavigationRoute),
+    );
+
+    await fixture.componentInstance.startLocation();
+    fixture.componentInstance.openRoutePlanner();
+    await fixture.whenStable();
+    mapClickCallback({
+      mapId: "gng-driving-map",
+      coordinates: { latitude: 3.157, longitude: 101.72 },
+      point: { x: 10, y: 20 },
+    });
+    await fixture.componentInstance.calculateRoute();
+
+    expect(fixture.componentInstance.navigationRoute()).toBeNull();
+    expect(fixture.componentInstance.routeError()).toBe("mapRouteFailed");
+    expect(fixture.componentInstance.routeLoading()).toBeFalse();
+    expect(mapEngine.addPolyline).not.toHaveBeenCalled();
   });
 
   it("shows relevant community reports ahead during navigation and removes alerts when navigation stops", async () => {
@@ -1227,7 +1518,33 @@ describe("MapPage", () => {
     expect(fixture.componentInstance.routeError()).toBe("mapRouteFailed");
   });
 
-  it("advances maneuvers locally, reports arrival, and stops without another location upload", async () => {
+  it("does not automatically reroute from stale GPS fixes and stops voice guidance", async () => {
+    api.getNearbyCommunityIncidents.and.returnValue(of([]));
+    api.calculateNavigationRoute.and.returnValue(of(routeAlertRoute));
+    await startRouteNavigation();
+    fixture.componentInstance.toggleVoiceGuidance();
+    const staleTimestamp = Date.now() - 60_000;
+    const stalePosition: Position = {
+      ...position,
+      timestamp: staleTimestamp,
+      coords: {
+        ...position.coords,
+        latitude: 3.2,
+        longitude: 101.75,
+      },
+    };
+
+    locationCallback(stalePosition, undefined);
+    await fixture.componentInstance.reroute(true);
+    await fixture.whenStable();
+
+    expect(api.calculateNavigationRoute).toHaveBeenCalledTimes(1);
+    expect(fixture.componentInstance.navigationPaused()).toBeTrue();
+    expect(fixture.componentInstance.locationState()).toBe("error");
+    expect(voiceGuidance.stop).toHaveBeenCalled();
+  });
+
+  it("advances maneuvers locally, keeps GPS tracking after arrival, and stops without a route request", async () => {
     const profile: VehicleProfile = {
       id: "vehicle-1",
       userId: "user-1",
@@ -1378,6 +1695,19 @@ describe("MapPage", () => {
     await fixture.whenStable();
     expect(fixture.componentInstance.navigationArrived()).toBeTrue();
     expect(voiceGuidance.speak).toHaveBeenCalledWith("mapVoiceArrive", "en");
+    expect(mapEngine.clearWatch).not.toHaveBeenCalled();
+
+    locationCallback(
+      {
+        ...position,
+        timestamp: Date.now(),
+        coords: { ...position.coords, latitude: 3.156, longitude: 101.719 },
+      },
+      undefined,
+    );
+    await fixture.whenStable();
+    expect(fixture.componentInstance.locationState()).toBe("active");
+    expect(api.calculateNavigationRoute).toHaveBeenCalledTimes(1);
 
     await fixture.componentInstance.stopNavigation();
     expect(fixture.componentInstance.navigationActive()).toBeFalse();
@@ -1389,9 +1719,27 @@ describe("MapPage", () => {
   it("clears the GPS watch and releases the native map when leaving the route", async () => {
     await fixture.componentInstance.startLocation();
     fixture.destroy();
-    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(mapEngine.clearWatch).toHaveBeenCalledWith("watch-1");
     expect(mapEngine.destroyMap).toHaveBeenCalledWith("gng-driving-map");
+  });
+
+  it("destroys a map whose initialization completes after the page is destroyed", async () => {
+    const creation = deferred<void>();
+    const destroyCallsBeforeReinitializing =
+      mapEngine.destroyMap.calls.count();
+    mapEngine.createMap.and.returnValue(creation.promise);
+    const initialization = fixture.componentInstance.initializeMap();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mapEngine.createMap).toHaveBeenCalledTimes(2);
+
+    fixture.destroy();
+    creation.resolve();
+    await initialization;
+
+    expect(mapEngine.destroyMap.calls.count()).toBe(
+      destroyCallsBeforeReinitializing + 2,
+    );
   });
 });
